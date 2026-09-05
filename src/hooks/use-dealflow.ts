@@ -7,12 +7,15 @@ import {
   FulfillmentOrder,
   CommercialSubscription,
   SubscriptionStatus,
+  Product,
+  Customer,
 } from '@/types/dealflow';
 
 export const QUERY_KEYS = {
   CUSTOMERS: ['customers'],
   CUSTOMER: (id: string) => ['customers', id],
   PRODUCTS: ['products'],
+  PRODUCT: (id: string) => ['products', id],
   QUOTATIONS: ['quotations'],
   QUOTATION: (id: string) => ['quotations', id],
   INVOICES: ['invoices'],
@@ -29,10 +32,49 @@ export function useCustomers() {
   });
 }
 
+export function useCustomer(id: string) {
+  return useQuery({
+    queryKey: QUERY_KEYS.CUSTOMER(id),
+    queryFn: () => dealflowApi.getCustomerById(id),
+    enabled: Boolean(id),
+  });
+}
+
 export function useProducts() {
   return useQuery({
     queryKey: QUERY_KEYS.PRODUCTS,
     queryFn: () => dealflowApi.getProducts(),
+  });
+}
+
+export function useProduct(id: string) {
+  return useQuery({
+    queryKey: QUERY_KEYS.PRODUCT(id),
+    queryFn: () => dealflowApi.getProductById(id),
+    enabled: Boolean(id),
+  });
+}
+
+export function useSaveProduct() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (product: Product) => dealflowApi.saveProduct(product),
+    onSuccess: (saved) => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PRODUCTS });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PRODUCT(saved.id) });
+    },
+  });
+}
+
+export function useDeleteProduct() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => dealflowApi.deleteProduct(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PRODUCTS });
+    },
   });
 }
 

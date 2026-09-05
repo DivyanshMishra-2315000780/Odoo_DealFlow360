@@ -47,6 +47,14 @@ export const dealflowApi = {
     return simulateDelay(product || null);
   },
 
+  async saveProduct(product: Product): Promise<Product> {
+    return simulateDelay(mockStore.saveProduct(product));
+  },
+
+  async deleteProduct(id: string): Promise<boolean> {
+    return simulateDelay(mockStore.deleteProduct(id));
+  },
+
   // Quotations
   async getQuotations(): Promise<Quotation[]> {
     return simulateDelay(mockStore.getQuotations());

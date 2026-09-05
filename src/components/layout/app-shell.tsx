@@ -18,6 +18,10 @@ import {
   CheckCircle,
   Command,
   RefreshCcw,
+  HeartPulse,
+  Package,
+  Tag,
+  BarChart3,
 } from 'lucide-react';
 import { useResetDemoData } from '@/hooks/use-dealflow';
 import { useToast } from '@/components/providers/query-provider';
@@ -65,7 +69,11 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     { label: 'Invoices & Cashflow', href: '/invoices', icon: CreditCard },
     { label: 'Fulfillment & Logistics', href: '/fulfillment', icon: Truck },
     { label: 'Subscriptions', href: '/subscriptions', icon: RefreshCcw },
-    { label: 'Customer Tiers', href: '/#customers', icon: Users },
+    { label: 'Deal Health', href: '/deal-health', icon: HeartPulse, alert: true },
+    { label: 'Products', href: '/products', icon: Package },
+    { label: 'Price Lists', href: '/price-lists', icon: Tag },
+    { label: 'Customers', href: '/customers', icon: Users },
+    { label: 'Reports & Analytics', href: '/reports', icon: BarChart3 },
     { label: 'Client Portal', href: '/portal', icon: Sparkles, badge: 'Client' },
   ];
 

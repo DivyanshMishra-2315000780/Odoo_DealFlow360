@@ -54,6 +54,30 @@ src/
 │   │   ├── page.tsx             # Warehouse Inventory & Fulfillment Ledger (9 columns, stock cards)
 │   │   └── [id]/
 │   │       └── page.tsx         # Warehouse Allocation & Split Dispatch Command Center
+│   ├── invoices/
+│   │   ├── page.tsx             # Commercial Invoices & Cashflow Ledger (8 columns, status counters)
+│   │   └── [id]/
+│   │       └── page.tsx         # Invoice Detail, Settlement & Lifecycle Command Center
+│   ├── subscriptions/
+│   │   ├── page.tsx             # Commercial Subscriptions & MRR Dashboard (KPIs, table, filters)
+│   │   └── [id]/
+│   │       └── page.tsx         # Subscription Detail, Billing Schedule & Action Dialogs
+│   ├── deal-health/
+│   │   └── page.tsx             # Deal Health & Anomaly Center (6 intelligence sections, deterministic diagnostics)
+│   ├── customers/
+│   │   ├── page.tsx             # Enterprise Customer Management Ledger (8 columns, tier badges, health meters)
+│   │   └── [id]/
+│   │       └── page.tsx         # Customer 360 Command Center (9 sections: Overview, Tier, Contacts, Quotes, Negs, Invoices, Subs, Health, Audit)
+│   ├── products/
+│   │   ├── page.tsx             # Enterprise Product Catalog (SKU table, KPIs, stock status, recurring pills)
+│   │   ├── new/
+│   │   │   └── page.tsx         # Product Creation Form (React Hook Form + Zod, variant builder, live tier math)
+│   │   └── [id]/
+│   │       └── page.tsx         # Product Detail (General info, Color/RAM/OEM variants, Bronze/Silver/Gold pricing, subscriptions)
+│   ├── price-lists/
+│   │   └── page.tsx             # Multi-Tier Commercial Price Lists (Bronze 5%, Silver 10%, Gold 15%, USD/EUR toggle)
+│   ├── reports/
+│   │   └── page.tsx             # Commercial Reports & Revenue Intelligence (6 KPIs, 4 data charts, CSV/PDF export)
 │   ├── login/
 │   │   └── page.tsx             # Enterprise Login (show/hide password, quick-fill demo pills)
 │   ├── signup/
@@ -339,6 +363,172 @@ $$\text{Effective Limit} = \min(\text{Customer Tier Limit}, \text{Product Catego
      - Supports `ACH Wire Transfer`, `Corporate Wire Transfer`, `Procurement Card`, and `Commercial Check`.
      - Live mutation updating store, switching statuses to `PAID` or `PARTIALLY_PAID`, and dispatching enterprise success toast.
 
+
+### J. Commercial Subscriptions & Recurring Revenue Module ([`/subscriptions`](file:///E:/Tidnatum/src/app/subscriptions/page.tsx), [`/subscriptions/[id]`](file:///E:/Tidnatum/src/app/subscriptions/[id]/page.tsx))
+1. **`/subscriptions` (Commercial Subscriptions Ledger & MRR Dashboard)**:
+   - **4 Summary KPI Metric Cards**:
+     - *Monthly Recurring Revenue (MRR)*: Normalized monthly value across all active recurring contracts with trend explanation.
+     - *Active*: Count of live recurring service and SLA contracts with filter toggle.
+     - *Paused*: Count of temporarily suspended retainers with amber indicator.
+     - *Cancelled*: Count of terminated agreements with historical retention tracking.
+   - **Filter & Search Controls**:
+     - Text search across Customer Name, Plan Name, Product/Service, and Subscription ID.
+     - Status filter pills (`All`, `Active`, `Paused`, `Cancelled`).
+     - Billing Frequency filter pills (`Any Frequency`, `Monthly`, `Quarterly`, `Annual`).
+   - **8-Column Subscriptions Table**:
+     - Customer (Name + system `TierBadge`), Plan / Product (Service name, plan title, contract duration), Billing Frequency (`BillingFrequencyBadge`: Monthly, Quarterly, Annual), Recurring Amount (with MRR normalized monthly equivalent), Next Billing Date (with auto-renew badge), Renewal Date, Status (`SubscriptionStatusBadge`: Active, Paused, Cancelled), and Action (`Manage` link to detail).
+2. **`/subscriptions/[id]` (Subscription Detail, Billing Schedule & Governance Actions)**:
+   - **Contract Overview Card**:
+     - Customer, Plan, Product/Service, Contract Duration, Start Date, Renewal Date, Billing Frequency, Seats/Licenses, Auto-Renew status, and administrative notes.
+   - **Visual Recurring Billing Sidebar**:
+     - Large recurring amount display with billing cycle indicator.
+     - MRR monthly rate normalization and Annual Contract Value (ACV) calculation.
+     - Next Billing Date status with suspended callouts for paused accounts.
+     - **Interactive Projected Billing Schedule**: Visual 4-event future billing calendar with active pulsed indicator on next upcoming invoice.
+   - **Included Services & Entitlements**:
+     - Itemized list of contractually guaranteed SLA entitlements (e.g. 24/7 TAM, 1-hour P1 SLA, hardware diagnostics, SaaS seats).
+   - **Recurring Invoice History Table**:
+     - Linked invoice ID, billing period, date issued, amount, and payment status badges.
+   - **Realistic Seeded Commercial Agreements**:
+     - `Acme Care Plan` (`SUB-201`): 2 Years, Monthly ($3,000/mo), Gold Tier customer, 100 SaaS seats, 24/7 TAM.
+     - `Beta Support SLA` (`SUB-202`): 1 Year, Quarterly ($4,550/quarter), Silver Tier customer, 4-hour SLA.
+     - `Nova Hardware Assurance` (`SUB-203`): 1 Year, Annual ($2,400/yr), Bronze Tier customer.
+     - `Zenith 24/7 Redundant SLA` (`SUB-204`): 3 Years, Monthly ($6,800/mo), PAUSED state with facility renovation rationale.
+     - `Delta Legacy Maintenance Retainer` (`SUB-205`): 1 Year, Monthly ($850/mo), CANCELLED state with customer offboarding notes.
+   - **State Actions with Confirmation Dialogs**:
+     - `Modify Terms`: Modal allowing modification of recurring charge amount, billing frequency, and auto-renew toggle with live MRR preview.
+     - `Pause Billing`: Destructive confirmation dialog requiring mandatory suspension justification; updates status to `PAUSED` and halts billing calendar.
+     - `Resume Billing`: One-click reactivation restoring billing schedules and dispatching toast confirmation.
+     - `Cancel Agreement`: Irreversible cancellation dialog requiring mandatory audit explanation; switches status to `CANCELLED`, disables upcoming billing, and strikes out next billing date.
+
+### K. Deal Health & Anomaly Dashboard ([`/deal-health`](file:///E:/Tidnatum/src/app/deal-health/page.tsx))
+1. **Intelligence Engine & Philosophy**:
+   - Strictly **deterministic, rules-based intelligence** — zero opaque LLM hallucinations.
+   - Diagnoses pipeline health across 4 core vectors: Velocity & Staleness, Concession Anomaly Detection, Margin Erosion, and Inventory/SLA Deficits.
+2. **6 Enterprise Intelligence Sections**:
+   - **1. Overall Deal Health & Risk Matrix**:
+     - 4 KPI cards: Healthy Deals (5 deals), At-Risk Deals (3 deals), Stalled Deals (2 deals), Discount Anomalies (3 flagged concessions).
+     - Global Deal Health Score (74/100) and evaluated pipeline volume ($168,900).
+   - **2. Stalled Deals & Velocity Diagnostics**:
+     - Identifies deals exceeding 12-month historical closing medians.
+     - Highlighted example: **Zenith Industries (`Q-1028`)** — Idle for 9 business days (62% below median velocity), revenue at risk: $15,100, recommended action: *"Nudge customer"*.
+     - Interactive **"Nudge Zenith Procurement"** button opening dispatch modal.
+   - **3. Discount Anomalies & Margin Erosion**:
+     - Detects severe statistical deviations from historical account median concessions.
+     - Highlighted example: **Delta Solutions (`Q-1052`)** — Requested 22% discount vs. typical 8% median (+14 points variance!), breaches Silver category limit (10%), margin erosion of -$4,180.
+     - Status: `ESCALATED` to Finance Controller.
+   - **4. Delivery Risk & Warehouse Deficit Ledger**:
+     - Highlights deals impacted by delayed fulfillment, inventory deficits, and backorders.
+     - Highlighted example: **Zenith Industries (`FUL-803` / `Q-1045`)** — 8 units of Laptop Pro 14 on `BACKORDER` at East Depot; customer delivery SLA penalty window triggers in 5 days.
+     - Also flags facility bottlenecks at Newark Regional Depot (`FUL-802`) and carrier dispatch windows (`FUL-804`).
+   - **5. Recommended Actions (Actionable Decision Cards)**:
+     - 3 prominent high-impact cards with interactive dialog modals:
+       1. *"Follow up with Zenith"* (Dispatches executive follow-up email with 7-day price lock guarantee).
+       2. *"Review Delta discount"* (Enforces 10% ceiling or counters with bundled warranty retainer).
+       3. *"Resolve East Depot stock shortage"* (Authorizes emergency inter-warehouse transfer from West Logistics Hub).
+   - **6. Deal Health & Anomaly Timeline**:
+     - Chronological multi-deal governance ledger with interactive filter pills (`All Deals`, `Q-1028`, `Q-1052`, `FUL-803`, `Q-1042`).
+     - Details timestamp, exact rule triggered (e.g. `ANOMALY RULE #AD-14`, `FULFILLMENT DEFICIT RULE #FD-03`), root cause, business impact, and recommended next step.
+3. **Interactive Action Modals**:
+   - `Nudge Customer Dialog`: Editable executive email template, 7-day price guarantee, auto-resets velocity watchdog.
+   - `Review Discount Anomaly Dialog`: Visual comparison of 22% vs 8% median vs 10% ceiling, 3 resolution strategies, records commercial justification.
+   - `Resolve Warehouse Shortage Dialog`: Reallocation selector between West Logistics Hub (5 units) and Chicago inbound batch, updates backorder state.
+
+### L. Product Catalog & Multi-Tier Price Lists ([`/products`](file:///E:/Tidnatum/src/app/products/page.tsx), [`/products/[id]`](file:///E:/Tidnatum/src/app/products/[id]/page.tsx), [`/products/new`](file:///E:/Tidnatum/src/app/products/new/page.tsx), [`/price-lists`](file:///E:/Tidnatum/src/app/price-lists/page.tsx))
+1. **`/products` (Enterprise Product Catalog)**:
+   - 8-column data table: Product (Name + Icon + Description + Variant count), Category (`Hardware` vs `Services`), SKU, Base Price (Formatted), Available Stock (`StockBadge`: In Stock, Low Stock, Lead Time Required), Subscription (`SubscriptionBadge`: One-Time vs Recurring with frequency), Status (`StatusBadge`: Active, Draft, Archived), and Action (`Manage` link to detail).
+   - 4 KPI summary cards: Total Products count, Hardware Systems (15% cap), Services & SLAs (10% cap), and Recurring/MRR SKUs.
+   - Multi-dimensional filters: Text search (matches Name, SKU, Description), Category filter pills (`All`, `Hardware`, `Services`), Commercial type pills (`All`, `One-Time`, `Subscription`), and Status pills (`All`, `Active`, `Draft`).
+   - Quick CTAs: "+ New Product" (links to `/products/new`) and "View Tier Price Lists" (links to `/price-lists`).
+2. **`/products/[id]` (Product Detail & Variant Management)**:
+   - Multi-currency toggle: Instant preview in **USD ($)** or **EUR (€)** (0.92 conversion factor).
+   - 4 Structured Section Tabs:
+     - **General Information**: Specifications, category ceilings, available stock, catalog status, commercial model.
+     - **Variants**: Multi-variant matrix configured with **Color** (e.g. Space Gray, Matte Black), **RAM / Spec** (16GB, 32GB, 64GB), **Manufacturer** (Dell Enterprise, Lenovo Think, Apple Silicon, Cisco), price deltas, and stock per variant. Includes "+ Add Variant" dialog.
+     - **Pricing (Multi-tier schedules)**:
+       - *Bronze Price List*: Base list price (0% default concession, 5% ceiling).
+       - *Silver Price List*: Volume discount schedule (5% - 8% concession, 10% ceiling).
+       - *Gold Price List*: Strategic partner concession (10% - 15% concession, 15% ceiling).
+     - **Subscription**: Dedicated recurring billing breakdown, billing frequency, recurring cycle charge, and links to master service agreements.
+   - Working action dialogs: "Adjust Stock" (real-time store update) and "Add Variant" (dynamic variant builder).
+3. **`/products/new` (Product Creation Form)**:
+   - Form state management & validation built with **React Hook Form** + **Zod** schema validation.
+   - Real-time policy math preview calculating Bronze, Silver, and Gold tier schedules with live category discount ceiling constraints before saving.
+   - Dynamic variant field array (`useFieldArray`) allowing live addition/removal of Color, RAM, Manufacturer, and price adjustments.
+   - Saves new product to reactive store and redirects to newly generated product detail view.
+4. **`/price-lists` (Multi-Tier Commercial Price Lists)**:
+   - Dedicated tier schedule tabs: **Bronze Commercial** (5% ceiling), **Silver Growth Volume** (10% ceiling), and **Gold Enterprise Strategic** (15% ceiling).
+   - Multi-currency switcher between **USD ($)** and **EUR (€)**.
+   - Full catalog table showing base list price, schedule discount %, effective tier price, savings amount, and commercial billing frequency.
+   - Highlights recurring charges (e.g. Care Plan $1,200/mo, Extended Warranty $350/yr).
+   - Prominent mandatory governance notice: *"Customer tier price lists never bypass product category discount ceilings."*
+
+### M. Customer Management & 360 Command Center ([`/customers`](file:///E:/Tidnatum/src/app/customers/page.tsx), [`/customers/[id]`](file:///E:/Tidnatum/src/app/customers/[id]/page.tsx))
+1. **`/customers` (Enterprise Customer Management Ledger)**:
+   - **8-Column Ledger**:
+     - *Company*: Name, icon, industry, corporate headquarters.
+     - *Customer Tier*: Visual `TierBadge` (`BRONZE` 5%, `SILVER` 10%, `GOLD` 15%).
+     - *Active Quotations*: Count of pipeline deals + aggregated grand total value in USD.
+     - *Open Invoices*: Count of unpaid/due invoices + current receivable balance.
+     - *Subscription*: Commercial SLA or Care Plan name, billing frequency pill, recurring amount, or "None (One-time)".
+     - *Deal Health*: Visual progress meter (0-100) with color-coded status (Healthy $\ge 75$, Neutral $60-74$, At-Risk $< 60$).
+     - *Owner*: Assigned Account Executive (AE) / Deal Desk owner.
+     - *Action*: Direct link to inspect Customer 360 Command Center.
+   - **4 KPI Metric Cards**:
+     - *Total Strategic Accounts* (5 enterprise customers across aerospace, tech, retail, manufacturing, energy).
+     - *Pipeline Under Management* (aggregate active deal volume across all accounts).
+     - *Outstanding Receivables* (open cashflow ledger total awaiting settlement).
+     - *Average Deal Health* (aggregate fleet health score meter).
+   - **Multi-Dimensional Search & Filtering**:
+     - Instant text search across company name, industry, account owner, and contact email.
+     - Customer tier filter pills: `All Tiers`, `Gold (15% cap)`, `Silver (10% cap)`, `Bronze (5% cap)`.
+     - Health filter pills: `All Health`, `Healthy (≥75)`, `At-Risk (<60)`.
+     - Subscription filter pills: `All Accounts`, `Has Active Plan`, `No Subscription`.
+   - **Mandatory Governance Callout**:
+     - Explicit notice reinforcing that **Gold tier account priority visually communicates strategic enterprise standing, but approval rules remain strictly independent of customer tier priority** ($\min(\text{Customer Tier}, \text{Category Ceiling})$).
+2. **`/customers/[id]` (Customer 360 & Governance Command Center)**:
+   - Contains all **9 required sections**:
+     1. **Company Overview**: Corporate description, industry sector, headquarters location, website link, and assigned AE owner card.
+     2. **Customer Tier**: Prominent display with limit ceiling (`BRONZE 5%`, `SILVER 10%`, `GOLD 15%`) and system qualification metrics (Lifetime spend vs. threshold, closed deals count, audited credit rating AAA/AA/A/BBB). Prominent amber governance banner: *"Gold Priority Standing — Approval Rules Independent of Tier Priority"*.
+     3. **Contact Information**: Primary stakeholder, executive email, direct phone number, billing address, and account manager details.
+     4. **Active Quotations**: Filtered list of quotation records with stages (`DRAFT`, `PENDING_FINANCE_APPROVAL`, `APPROVED`, `IN_NEGOTIATION`, `CONFIRMED`), amounts, discount concessions, and quick inspect links.
+     5. **Negotiations**: Active deal concessions under commercial review, procurement counter-requests, requested vs allowed discount variance, and delivery SLA negotiations.
+     6. **Invoices & Cashflow**: Complete ledger of customer invoices (`PAID`, `SENT`, `DUE`, `PARTIALLY_PAID`), settlement balances, pre-shipment indicators, and payment links.
+     7. **Subscriptions & Service Plans**: Commercial recurring agreements (`Active`, `Paused`, `Cancelled`), recurring fees, billing schedules, and direct links to `/subscriptions/[id]`.
+     8. **Deal Health & Diagnostics**: Health score meter, stall velocity alerts, concession variance monitoring, and delivery risk status.
+     9. **Activity Timeline**: Full chronological audit stream of all commercial interactions, approvals, counter-offers, and settlements.
+
+### N. Commercial Reports & Revenue Intelligence ([`/reports`](file:///E:/Tidnatum/src/app/reports/page.tsx))
+1. **Executive Header & Export Actions**:
+   - Title: Commercial Reports & Revenue Intelligence.
+   - **Export CSV**: Instant client-side generation and download of complete executive commercial CSV dataset.
+   - **Executive PDF**: Automated print/PDF vector report trigger with feedback toast.
+2. **Enterprise Filter Dimensions**:
+   - *Date Range*: `Last 30 Days`, `This Quarter (Q3 2026)`, `Year to Date (YTD)`, `Last 12 Months`.
+   - *Sales Team*: `All Sales Teams`, `Enterprise Strategic`, `Commercial Mid-Market`, `Direct Procurement`.
+   - *Customer Tier*: `All Tiers`, `Gold Tier (15% Cap)`, `Silver Tier (10% Cap)`, `Bronze Tier (5% Cap)`.
+   - *Category*: `All Products & Services`, `Hardware Systems (15% Cap)`, `Services & SLAs (10% Cap)`, `Recurring Subscriptions`.
+3. **6 Primary Performance KPIs**:
+   - *Quotes Created*: **148** (+18.4% vs last period).
+   - *Average Approval Time*: **6.4h** (-3.2h turnaround reduction; compliant with <8.0h SLA).
+   - *Conversion Rate*: **68.4%** (+4.1% win-rate).
+   - *Pipeline Value*: **$1,482,500** across active stages.
+   - *Realized Revenue*: **$842,500** (86.2% gross margin retention).
+   - *Top Upsell*: **Care Plan 2yr** (44% attach rate, $1,200/mo recurring retainer).
+4. **4 Concrete Data-Driven Charts (No Decorative Charts)**:
+   - **Chart 1: Quotation Pipeline by Status**:
+     - Visual segmented distribution bar + detailed breakdown table for Draft, Pending Approval, Approved, In Negotiation, and Confirmed deals with count, total value, and conversion drop-offs.
+   - **Chart 2: Approval Time Trend (6 Months)**:
+     - Interactive SVG multi-point line chart with filled gradient area, coordinate markers, and 8.0h SLA ceiling dashed threshold showing velocity contraction from 12.2h (April) to 6.4h (September).
+   - **Chart 3: Revenue Realization & MRR Growth**:
+     - Dual-bar monthly trajectory comparing gross one-time billings vs recurring subscription MRR (+$58,400 MRR).
+   - **Chart 4: Top Products & Upsell Performance**:
+     - Performance cards showing attach rates, unit volume, revenue, and gross profit margins (Care Plan 2yr, Laptop Pro 14, Docking Station Thunderbolt 4, Extended Warranty 3yr, Onsite Deployment).
+5. **Discount Governance & Tier Audit Matrix**:
+   - Detailed analysis of concession averages across Gold (12.8%), Silver (7.9%), and Bronze (3.2%) tiers, explicitly reinforcing that Gold tier accounts never bypass product category discount ceilings.
+6. **Actionable Executive Recommendations**:
+   - 3 automated strategic suggestions: Upselling Care Plan 2yr, single-click auto-approvals for sub-3% concessions, and Net 10 early cash collection incentives.
+
 ---
 
 ## 5. Verification Status & Build Health
@@ -347,27 +537,35 @@ Run command:
 ```bash
 npm run build
 ```
-* **Turbopack Build**: Compiles cleanly in **~2.9s**
+* **Turbopack Build**: Compiles cleanly in **~3.5s**
 * **TypeScript Typecheck**: Passes with **0 errors** (checked via Next.js strict build)
-* **Static / Dynamic Routes Verified (19/19)**:
+* **Static / Dynamic Routes Verified (27/27)**:
   - `○ /` (Executive Sales Dashboard)
   - `○ /_not-found`
   - `○ /approvals` (Commercial Approval Center Ledger)
   - `ƒ /approvals/[id]` (Approval Decision Command Center Dynamic route)
+  - `○ /customers` (Enterprise Customer Management Ledger)
+  - `ƒ /customers/[id]` (Customer 360 Command Center Dynamic route)
+  - `○ /deal-health` (Deal Health & Anomaly Center)
   - `○ /fulfillment` (Warehouse Inventory & Fulfillment Ledger)
   - `ƒ /fulfillment/[id]` (Warehouse Allocation & Dispatch Dynamic route)
   - `○ /invoices` (Commercial Invoices & Cashflow Ledger)
   - `ƒ /invoices/[id]` (Commercial Invoice Detail & Settlement Dynamic route)
   - `○ /login`
-  - `○ /signup`
   - `○ /portal`
   - `○ /portal/invoices`
   - `○ /portal/profile`
   - `○ /portal/quotations`
   - `ƒ /portal/quotations/[id]` (Customer Portal Dynamic route)
+  - `○ /price-lists` (Multi-Tier Commercial Price Lists)
+  - `○ /products` (Enterprise Product Catalog)
+  - `ƒ /products/[id]` (Product Detail, Variants & Multi-Tier Pricing Dynamic route)
+  - `○ /products/new` (Product Creation Form with RHF + Zod)
   - `○ /quotes` (Sales Quotations List)
-  - `○ /quotes/new` (Multi-line Quotation Creator)
   - `ƒ /quotes/[id]` (Sales Quotation Detail & Governance Dynamic route)
+  - `○ /quotes/new` (Multi-line Quotation Creator)
+  - `○ /reports` (Commercial Reports & Revenue Intelligence)
+  - `○ /signup`
   - `○ /subscriptions` (Commercial Subscriptions Ledger & MRR Dashboard)
   - `ƒ /subscriptions/[id]` (Subscription Detail, Billing Schedule & Actions Dynamic route)
 
@@ -401,32 +599,56 @@ npm run build
   - `src/types/dealflow.ts` & `src/mock/seed-data.ts`: Explicit `isPartialDelivery` and `partialDeliveryNotes` tracking batch fulfillment.
   - `src/app/invoices/[id]/page.tsx`: Clear partial fulfillment banner, delivery indicators per line, and partial payment settlement tracking (`INV-1044`).
 
-### 1. Customer Tier is System-Assigned, NOT Customer-Selected:
+### 3. Customer Tier is System-Assigned, NOT Customer-Selected:
 * **Status**: ✅ **COMPLETED & ENFORCED**
 * **Code Implementation**:
   - `src/lib/customer-tier.ts`: Evaluates tier objectively based on lifetime spend, deal count, and credit rating.
   - `src/app/signup/page.tsx`: Self-selection completely removed. All new signups enroll at introductory Bronze (5%) with system audit disclosure.
   - `src/app/portal/profile/page.tsx`: Profile inspects and displays system-assigned qualifications ($485,000 lifetime spend, AAA credit $\to$ Gold status).
 
-### 2. Customer Tier vs. Subscription Plan (Strict Separation of Concerns):
+### 4. Customer Tier vs. Subscription Plan (Strict Separation of Concerns):
 * **Status**: ✅ **COMPLETED & ENFORCED**
 * **Code Implementation**:
   - `src/types/auth.ts` & `src/types/dealflow.ts`: Customer Tier (`Bronze`, `Silver`, `Gold`) and SaaS Subscription (`Starter`, `Professional`, `Enterprise`) are completely distinct data models.
   - `src/app/portal/profile/page.tsx`: Rendered in two separate, non-overlapping cards with independent controls.
 
-### 3. Subscription Upgrades / Downgrades & Proration:
+### 5. Subscription Upgrades / Downgrades & Proration:
 * **Status**: ✅ **COMPLETED & ENFORCED**
 * **Code Implementation**:
   - `src/lib/proration.ts`: Implements exact-day proration math for 30-day billing periods.
   - `src/components/subscriptions/manage-subscription-dialog.tsx`: Live modal computing exact prorated charges on upgrade or prorated account credits on downgrade with instant mock persistence.
 
-### 4. Customer Tier NEVER Bypasses Approval Rules:
+### 6. Customer Tier NEVER Bypasses Approval Rules:
 * **Status**: ✅ **COMPLETED & ENFORCED**
 * **Code Implementation**:
   - `src/lib/discount-engine.ts`: Effective limit is strictly $\min(\text{Tier Limit}, \text{Category Limit})$.
   - `src/app/portal/quotations/[id]/page.tsx` & `src/components/quotations/new-quotation-dialog.tsx`: Any discount exceeding the effective limit triggers **"Additional approval required"** and forces Finance Controller sign-off, regardless of Gold tier standing.
 
-### 5. Backend Integration Timing:
+### 7. Commercial Subscriptions & Recurring Revenue Engine:
+* **Status**: ✅ **COMPLETED & ENFORCED**
+* **Code Implementation**:
+  - `src/types/dealflow.ts`: `CommercialSubscription`, `BillingFrequency`, `SubscriptionStatus`, `SubscriptionInvoiceRecord`.
+  - `src/mock/seed-data.ts` & `src/mock/store.ts`: Realistic multi-year and SLA agreements (`Acme Care Plan` 2 years monthly, `Beta Support SLA` quarterly, `Zenith SLA` paused, `Delta SLA` cancelled).
+  - `src/app/subscriptions/page.tsx`: MRR calculations, active/paused/cancelled metric counters, 8-column subscription ledger with status and frequency filters.
+  - `src/app/subscriptions/[id]/page.tsx`: Visual recurring billing breakdown, projected 4-event billing schedule, included entitlements, recurring invoice history, and guarded confirmation dialogs for Modify, Pause, Resume, and Cancel actions.
+
+### 8. Deterministic Deal Governance & Anomaly Intelligence:
+* **Status**: ✅ **COMPLETED & ENFORCED**
+* **Code Implementation**:
+  - `src/lib/deal-health.ts`: Diagnostic engine tracking deal velocity, concession statistical deviation, and warehouse delivery bottlenecks.
+  - `src/app/deal-health/page.tsx`: Comprehensive command center displaying 6 intelligence sections (Overall Health KPIs, Stalled Deals, Discount Anomalies, Delivery Risks, Recommended Actions, and Health Timeline) with interactive action dialogs.
+  - Strictly deterministic heuristic rules — zero opaque LLM hallucinations.
+
+### 9. Commercial Product Catalog, Multi-Currency & Tier Schedules:
+* **Status**: ✅ **COMPLETED & ENFORCED**
+* **Code Implementation**:
+  - `src/types/dealflow.ts`: `Product`, `ProductVariant` (Color, RAM, Manufacturer, Price Deltas), `TierPriceEntry`, `ProductStatus`, `ProductBillingFrequency`.
+  - `src/app/products/page.tsx`: 8-column catalog table with stock status indicators, recurring subscription badges, and search/category filters.
+  - `src/app/products/[id]/page.tsx`: Product command center with General Info, Variants matrix, Multi-tier pricing in USD/EUR, and recurring terms.
+  - `src/app/products/new/page.tsx`: Form powered by **React Hook Form** + **Zod** schema validation with real-time tier policy math and dynamic variant builder.
+  - `src/app/price-lists/page.tsx`: Dedicated Bronze (5%), Silver (10%), Gold (15%) schedules with live USD/EUR currency toggle and recurring pricing callouts.
+
+### 10. Backend Integration Timing:
 * **Status**: ✅ **ACTIVE ARCHITECTURE**
 * **Code Implementation**:
   - All operations route through the mock abstraction layer in [`src/services/api.ts`](file:///E:/Tidnatum/src/services/api.ts) and [`src/mock/store.ts`](file:///E:/Tidnatum/src/mock/store.ts).

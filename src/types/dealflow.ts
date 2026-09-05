@@ -13,14 +13,46 @@ export const CATEGORY_DISCOUNT_LIMITS: Record<ProductCategory, number> = {
   Services: 10,
 };
 
+export interface ProductVariant {
+  id: string;
+  name: string;
+  sku: string;
+  color?: string;
+  ram?: string;
+  manufacturer?: string;
+  priceAdjustment: number;
+  availableStock: number;
+}
+
+export interface TierPriceEntry {
+  usd: number;
+  eur: number;
+  discountPercent: number;
+}
+
+export type ProductStatus = 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
+export type ProductBillingFrequency = 'NONE' | 'MONTHLY' | 'QUARTERLY' | 'ANNUAL';
+
 export interface Product {
   id: string;
   sku: string;
   name: string;
   category: ProductCategory;
   basePrice: number;
+  currency?: 'USD' | 'EUR';
   description: string;
   stockStatus: 'IN_STOCK' | 'LOW_STOCK' | 'LEAD_TIME_REQUIRED';
+  availableStock?: number;
+  status?: ProductStatus;
+  isSubscription?: boolean;
+  billingFrequency?: ProductBillingFrequency;
+  recurringPrice?: number;
+  variants?: ProductVariant[];
+  tierPricing?: {
+    Bronze: TierPriceEntry;
+    Silver: TierPriceEntry;
+    Gold: TierPriceEntry;
+  };
 }
 
 export interface Customer {
@@ -34,6 +66,12 @@ export interface Customer {
   activeDealsCount: number;
   totalLifetimeValue: number;
   creditLimit: number;
+  phone?: string;
+  address?: string;
+  website?: string;
+  creditRating?: string;
+  dealHealthScore?: number;
+  notes?: string;
 }
 
 export interface QuotationLineItem {

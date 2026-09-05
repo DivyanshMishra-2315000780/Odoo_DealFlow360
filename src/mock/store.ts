@@ -91,6 +91,35 @@ export const mockStore = {
     return this.getProducts().find((p) => p.id === id);
   },
 
+  saveProduct(product: Product): Product {
+    const products = this.getProducts();
+    const index = products.findIndex((p) => p.id === product.id);
+    let updated: Product[];
+    if (index >= 0) {
+      updated = [...products];
+      updated[index] = product;
+    } else {
+      updated = [product, ...products];
+    }
+    if (isBrowser()) {
+      saveToStorage(STORAGE_KEYS.PRODUCTS, updated);
+    } else {
+      memoryProducts = updated;
+    }
+    return product;
+  },
+
+  deleteProduct(id: string): boolean {
+    const products = this.getProducts();
+    const updated = products.filter((p) => p.id !== id);
+    if (isBrowser()) {
+      saveToStorage(STORAGE_KEYS.PRODUCTS, updated);
+    } else {
+      memoryProducts = updated;
+    }
+    return true;
+  },
+
   getQuotations(): Quotation[] {
     if (isBrowser()) {
       return loadFromStorage<Quotation[]>(STORAGE_KEYS.QUOTATIONS, SEED_QUOTATIONS);
