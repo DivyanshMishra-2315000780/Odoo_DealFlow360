@@ -56,9 +56,13 @@ export default function ApprovalsPage() {
   const getCurrentStepLabel = (quote: Quotation): { label: string; tone: string } => {
     switch (quote.status) {
       case 'PENDING_FINANCE_APPROVAL':
+        return { label: 'Finance Review', tone: 'bg-amber-100 text-amber-900 border-amber-300' };
       case 'PENDING_APPROVAL':
       case 'PENDING_DISCOUNT_APPROVAL':
-        return { label: 'Finance Review', tone: 'bg-amber-100 text-amber-900 border-amber-300' };
+        return {
+          label: quote.salesManagerApproved ? 'Finance Review' : 'Sales Manager Review',
+          tone: 'bg-amber-100 text-amber-900 border-amber-300',
+        };
       case 'RETURNED':
         return { label: 'Returned to AE', tone: 'bg-orange-100 text-orange-900 border-orange-300' };
       case 'APPROVED':

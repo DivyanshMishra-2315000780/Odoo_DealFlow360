@@ -990,7 +990,8 @@ export default function SalesDashboardPage() {
             >
               Close
             </Button>
-            {(inspectQuotation.status === 'PENDING_FINANCE_APPROVAL' ||
+            {(inspectQuotation.status === 'PENDING_APPROVAL' ||
+              inspectQuotation.status === 'PENDING_FINANCE_APPROVAL' ||
               inspectQuotation.status === 'PENDING_DISCOUNT_APPROVAL') && (
               <>
                 <Button

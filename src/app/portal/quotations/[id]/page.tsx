@@ -41,10 +41,10 @@ export default function CustomerQuotationDetailPage() {
   const quotationId = typeof params?.id === 'string' ? params.id : 'Q-1042';
   const quotation = quotations.find((q) => q.id === quotationId) || quotations[0];
 
-  // Negotiation form state
-  const [comment, setComment] = useState('');
-  const [requestedDiscount, setRequestedDiscount] = useState<number>(14);
-  const [requestedDeliveryDate, setRequestedDeliveryDate] = useState('2026-09-18');
+  // Negotiation form state (Step 8: Customer negotiates setup discount and delivery date)
+  const [comment, setComment] = useState('We request 18% discount on onsite setup and deployment target by Sep 25, 2026.');
+  const [requestedSetupDiscount, setRequestedSetupDiscount] = useState<number>(18);
+  const [requestedDeliveryDate, setRequestedDeliveryDate] = useState('2026-09-25');
   const [isSubmittingNegotiation, setIsSubmittingNegotiation] = useState(false);
 
   if (!quotation) {
@@ -59,17 +59,15 @@ export default function CustomerQuotationDetailPage() {
   }
 
   // Calculate if the requested negotiation discount exceeds limits
-  const customerTier = quotation.customerTier;
-  const maxCategoryLimit = Math.max(
-    ...quotation.items.map((i) => calculateEffectiveDiscountLimit(customerTier, i.category))
-  );
-  const isOverLimit = requestedDiscount > maxCategoryLimit;
-  const excess = isOverLimit ? requestedDiscount - maxCategoryLimit : 0;
+  // Onsite Setup is Services (Category limit 10%)
+  const setupAllowedLimit = 10;
+  const isOverLimit = requestedSetupDiscount > setupAllowedLimit;
+  const excess = isOverLimit ? requestedSetupDiscount - setupAllowedLimit : 0;
 
-  // Confirmation guard: only allowed if status is APPROVED
-  const canConfirm = quotation.status === 'APPROVED';
+  // Confirmation guard: only allowed if status is APPROVED and not awaiting re-approval
+  const canConfirm = quotation.status === 'APPROVED' && !quotation.reapprovalRequired;
 
-  // Handle Negotiation Submission
+  // Handle Negotiation Submission (Steps 8 & 9)
   const handleSubmitNegotiation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!comment.trim()) {
@@ -83,22 +81,33 @@ export default function CustomerQuotationDetailPage() {
 
     setIsSubmittingNegotiation(true);
     try {
-      const noteDetails = `Client Counter-Proposal: Requested ${requestedDiscount}% discount (Allowed max: ${maxCategoryLimit}%). Target delivery: ${requestedDeliveryDate}. Note: "${comment.trim()}"`;
+      const reapprovalReason = isOverLimit
+        ? `Customer negotiated terms exceed policy: Requested ${requestedSetupDiscount}% discount on Onsite Setup (Services ceiling: ${setupAllowedLimit}%). Target delivery: ${requestedDeliveryDate}. Re-approval required before contract can be confirmed.`
+        : undefined;
+
+      const noteDetails = `Client Counter-Proposal: Requested ${requestedSetupDiscount}% Onsite Setup discount (Allowed: ${setupAllowedLimit}%). Target delivery: ${requestedDeliveryDate}. Note: "${comment.trim()}"`;
+
       await updateQuotationStatus.mutateAsync({
         id: quotation.id,
-        status: isOverLimit ? 'PENDING_FINANCE_APPROVAL' : 'IN_NEGOTIATION',
+        status: isOverLimit ? 'PENDING_APPROVAL' : 'IN_NEGOTIATION',
         note: noteDetails,
         actor: `${quotation.customerName} (Client Procurement)`,
+        meta: {
+          reapprovalRequired: isOverLimit,
+          reapprovalReason,
+          deliveryDate: requestedDeliveryDate,
+          salesManagerApproved: false,
+          financeApproved: false,
+        },
       });
 
       toast({
-        title: 'Negotiation Submitted',
+        title: isOverLimit ? 'Re-Approval Required' : 'Negotiation Submitted',
         description: isOverLimit
-          ? 'Counter-offer exceeds permitted discount ceiling. Additional finance approval required.'
-          : 'Your terms have been sent to Marcus Vance for review.',
+          ? `Requested ${requestedSetupDiscount}% on Onsite Setup exceeds 10% Services limit (+${excess}% excess). Status returned to Pending Approval.`
+          : 'Your counter-terms have been sent to account manager Marcus Vance for review.',
         type: isOverLimit ? 'warning' : 'success',
       });
-      setComment('');
     } catch {
       toast({
         title: 'Submission Failed',
@@ -109,19 +118,24 @@ export default function CustomerQuotationDetailPage() {
     }
   };
 
-  // Handle Official Confirmation
+  // Handle Official Confirmation (Step 11)
   const handleConfirmQuotation = async () => {
     if (!canConfirm) return;
     try {
       await updateQuotationStatus.mutateAsync({
         id: quotation.id,
         status: 'CONFIRMED',
-        note: 'Customer confirmed and bound terms via Client Portal.',
+        note: 'Customer officially confirmed and bound all commercial terms via Client Portal.',
         actor: `${quotation.customerName} (Client Signatory)`,
+        meta: {
+          reapprovalRequired: false,
+          reapprovalReason: undefined,
+          dealHealthScore: 98,
+        },
       });
       toast({
         title: 'Quotation Confirmed!',
-        description: `${quotation.id} accepted. Order moved to Fulfillment and Invoice generation.`,
+        description: `${quotation.id} accepted. Status: CONFIRMED. Order moved to Fulfillment and Invoice generation.`,
         type: 'success',
       });
     } catch {
@@ -145,6 +159,26 @@ export default function CustomerQuotationDetailPage() {
         </Link>
         <span className="text-xs text-slate-400 font-mono">Deal ID: {quotation.id}</span>
       </div>
+
+      {/* RE-APPROVAL NOTICE BANNER (STEP 9 & 10) */}
+      {quotation.reapprovalRequired && (
+        <div className="p-4 rounded-lg bg-amber-50 border border-amber-300 text-xs text-amber-950 flex items-start gap-3 shadow-enterprise">
+          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <strong className="text-sm font-bold text-amber-950">
+                ⚡ Re-Approval Required: Counter-Offer Exceeds Policy Limits
+              </strong>
+              <span className="bg-amber-200 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                Pending Finance Re-Signoff
+              </span>
+            </div>
+            <p className="text-slate-700 leading-relaxed">
+              {quotation.reapprovalReason || 'Your negotiated counter-terms exceed policy ceilings. Sales Manager Marcus Vance and Finance Controller Sarah Sterling must re-approve these terms before the contract can be confirmed.'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Hero Header Card */}
       <div className="p-6 rounded-lg bg-white border border-slate-200 shadow-enterprise">
@@ -372,14 +406,32 @@ export default function CustomerQuotationDetailPage() {
             </CardHeader>
             <CardContent className="p-5 pt-3">
               <form onSubmit={handleSubmitNegotiation} className="space-y-4 text-xs">
-                {/* Proposed Discount % Slider */}
+                {/* Demo Quick-Fill Pill for Step 8 */}
+                <div className="p-2.5 rounded-md bg-teal-50/70 border border-teal-200/80 flex items-center justify-between">
+                  <div className="text-[11px] text-teal-900 font-medium">
+                    Demo Step 8 Terms
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRequestedSetupDiscount(18);
+                      setRequestedDeliveryDate('2026-09-25');
+                      setComment('We request 18% discount on onsite setup and deployment target by Sep 25, 2026.');
+                    }}
+                    className="text-[11px] font-semibold text-teal-700 hover:text-teal-900 underline"
+                  >
+                    ⚡ Auto-Fill Step 8 Terms
+                  </button>
+                </div>
+
+                {/* Proposed Discount % Slider for Onsite Setup */}
                 <div>
                   <div className="flex justify-between items-center mb-1.5">
                     <label className="font-semibold text-slate-700">
-                      Requested Discount %
+                      Requested Onsite Setup Discount %
                     </label>
                     <span className="font-mono font-bold text-xs text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
-                      {requestedDiscount}% (Policy Max: {maxCategoryLimit}%)
+                      {requestedSetupDiscount}% (Services Ceiling: {setupAllowedLimit}%)
                     </span>
                   </div>
                   <input
@@ -387,10 +439,16 @@ export default function CustomerQuotationDetailPage() {
                     min="5"
                     max="25"
                     step="1"
-                    value={requestedDiscount}
-                    onChange={(e) => setRequestedDiscount(Number(e.target.value))}
+                    value={requestedSetupDiscount}
+                    onChange={(e) => setRequestedSetupDiscount(Number(e.target.value))}
                     className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-600"
                   />
+                  <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+                    <span>5%</span>
+                    <span className="font-semibold text-slate-600">10% (Policy Cap)</span>
+                    <span className="text-amber-600 font-semibold">18% (Negotiated)</span>
+                    <span>25%</span>
+                  </div>
                 </div>
 
                 {/* POLICY ALERT: Additional Approval Required */}
@@ -398,13 +456,13 @@ export default function CustomerQuotationDetailPage() {
                   <div className="p-3 rounded-lg border border-amber-300 bg-amber-50 text-amber-950 space-y-1 shadow-2xs">
                     <div className="flex items-center gap-1.5 font-bold text-xs text-amber-900">
                       <AlertCircle className="w-4 h-4 text-amber-700 shrink-0" />
-                      <span>Additional approval required</span>
+                      <span>Additional re-approval required</span>
                     </div>
                     <p className="text-[11px] text-slate-700 leading-relaxed">
-                      Your requested discount of <strong>{requestedDiscount}%</strong> exceeds your permitted {customerTier} category ceiling ({maxCategoryLimit}%) by <strong>+{excess}%</strong>.
+                      Your requested discount of <strong>{requestedSetupDiscount}%</strong> on Onsite Setup exceeds the Services category ceiling ({setupAllowedLimit}%) by <strong>+{excess} percentage points</strong>.
                     </p>
                     <p className="text-[10px] text-amber-800 italic pt-0.5">
-                      Submitting this request will escalate the quotation to the Finance Controller for review.
+                      Submitting this counter-offer will escalate the quotation back to the Sales Manager and Finance Controller for re-approval before confirmation can proceed.
                     </p>
                   </div>
                 )}

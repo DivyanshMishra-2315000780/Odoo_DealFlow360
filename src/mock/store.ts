@@ -164,7 +164,15 @@ export const mockStore = {
     id: string,
     newStatus: QuotationStatus,
     note?: string,
-    actor: string = 'Authorized Approver'
+    actor: string = 'Authorized Approver',
+    meta?: {
+      salesManagerApproved?: boolean;
+      financeApproved?: boolean;
+      reapprovalRequired?: boolean;
+      reapprovalReason?: string;
+      deliveryDate?: string;
+      dealHealthScore?: number;
+    }
   ): Quotation | null {
     const quotation = this.getQuotationById(id);
     if (!quotation) return null;
@@ -173,7 +181,9 @@ export const mockStore = {
       id: `AUD-${Date.now()}`,
       timestamp: new Date().toISOString(),
       actor,
-      action: `Status updated to ${newStatus}`,
+      action: meta?.reapprovalRequired
+        ? 'Re-Approval Required (Policy Exceeded)'
+        : `Status updated to ${newStatus}`,
       details: note || `Quotation state transitioned to ${newStatus}.`,
       badgeType:
         newStatus === 'APPROVED' || newStatus === 'CONFIRMED'
@@ -183,9 +193,47 @@ export const mockStore = {
           : 'warning',
     };
 
+    let salesManagerApproved = meta?.salesManagerApproved !== undefined
+      ? meta.salesManagerApproved
+      : quotation.salesManagerApproved;
+
+    let financeApproved = meta?.financeApproved !== undefined
+      ? meta.financeApproved
+      : quotation.financeApproved;
+
+    let reapprovalRequired = meta?.reapprovalRequired !== undefined
+      ? meta.reapprovalRequired
+      : quotation.reapprovalRequired;
+
+    let reapprovalReason = meta?.reapprovalReason !== undefined
+      ? meta.reapprovalReason
+      : quotation.reapprovalReason;
+
+    let dealHealthScore = meta?.dealHealthScore !== undefined
+      ? meta.dealHealthScore
+      : quotation.dealHealthScore;
+
+    if (newStatus === 'APPROVED') {
+      salesManagerApproved = true;
+      financeApproved = true;
+      reapprovalRequired = false;
+      reapprovalReason = undefined;
+      dealHealthScore = Math.max(dealHealthScore, 92);
+    } else if (newStatus === 'CONFIRMED') {
+      reapprovalRequired = false;
+      reapprovalReason = undefined;
+      dealHealthScore = 98;
+    }
+
     const updatedQuotation: Quotation = {
       ...quotation,
       status: newStatus,
+      salesManagerApproved,
+      financeApproved,
+      reapprovalRequired,
+      reapprovalReason,
+      dealHealthScore,
+      deliveryDate: meta?.deliveryDate || quotation.deliveryDate,
       auditTrail: [newAuditEntry, ...quotation.auditTrail],
       updatedAt: new Date().toISOString(),
     };
@@ -269,6 +317,27 @@ export const mockStore = {
     } else {
       memoryInvoices = invoices;
     }
+
+    // Synchronize linked quotation deal health & activity
+    if (isFullyPaid && invoice.quotationId) {
+      const quote = this.getQuotationById(invoice.quotationId);
+      if (quote) {
+        const paymentAudit: AuditEntry = {
+          id: `AUD-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          actor: 'Finance Settlement Desk',
+          action: 'Payment Succeeded (PAID)',
+          details: `Invoice ${invoice.id} settled in full (${paymentMethod}, Ref #${paymentReference}). Deal completed.`,
+          badgeType: 'success',
+        };
+        this.saveQuotation({
+          ...quote,
+          dealHealthScore: 100,
+          auditTrail: [paymentAudit, ...quote.auditTrail],
+        });
+      }
+    }
+
     return updatedInvoice;
   },
 
@@ -335,7 +404,52 @@ export const mockStore = {
       allocations: updatedAllocations,
     };
 
-    return this.updateFulfillmentOrder(updated);
+    this.updateFulfillmentOrder(updated);
+
+    // Synchronize linked invoice(s): unlock pre-shipment hold & mark INVOICED
+    const invoices = this.getInvoices();
+    let invoiceUpdated = false;
+    const updatedInvoices = invoices.map((inv) => {
+      if (inv.quotationId === order.quotationId) {
+        invoiceUpdated = true;
+        return {
+          ...inv,
+          isShipped: true,
+          shipmentStatus: 'SHIPPED' as const,
+          lifecycleStage: 'INVOICED' as const,
+          notes: `Carrier dispatch verified: ${carrier} (Tracking #${trackingNumber}). Commercial invoice released for payment.`,
+        };
+      }
+      return inv;
+    });
+
+    if (invoiceUpdated) {
+      if (isBrowser()) {
+        saveToStorage(STORAGE_KEYS.INVOICES, updatedInvoices);
+      } else {
+        memoryInvoices = updatedInvoices;
+      }
+    }
+
+    // Synchronize linked quotation: update fulfillmentStatus & audit log
+    const quote = this.getQuotationById(order.quotationId);
+    if (quote) {
+      const shipAudit: AuditEntry = {
+        id: `AUD-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        actor: 'Logistics Center (Main WH & East Depot)',
+        action: 'Shipment Dispatched & Invoice Released',
+        details: `Dispatched 24 units (${carrier} #${trackingNumber}). Invoice generated and released for settlement.`,
+        badgeType: 'success',
+      };
+      this.saveQuotation({
+        ...quote,
+        fulfillmentStatus: 'IN_TRANSIT',
+        auditTrail: [shipAudit, ...quote.auditTrail],
+      });
+    }
+
+    return updated;
   },
 
   // Subscriptions & Recurring Revenue

@@ -31,8 +31,10 @@ import { Button } from '@/components/ui/button';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { TierBadge } from '@/components/ui/tier-badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { useToast } from '@/components/providers/query-provider';
 import { formatCurrency } from '@/lib/utils';
+import { useQuotations, useInvoices } from '@/hooks/use-dealflow';
 import {
   SEEDED_STALLED_DEALS,
   SEEDED_DISCOUNT_ANOMALIES,
@@ -48,6 +50,10 @@ import {
 
 export default function DealHealthPage() {
   const { toast } = useToast();
+  const { data: quotations = [] } = useQuotations();
+  const { data: invoices = [] } = useInvoices();
+  const q1042 = quotations.find((q) => q.id === 'Q-1042');
+  const inv1042 = invoices.find((inv) => inv.id === 'INV-1042');
 
   // Active filter for timeline
   const [timelineFilter, setTimelineFilter] = useState<string>('ALL');
@@ -172,13 +178,37 @@ export default function DealHealthPage() {
     });
   };
 
-  // Filtered timeline
+  // Filtered timeline enriched with live dynamic actions on Q-1042
   const filteredTimeline = useMemo(() => {
-    if (timelineFilter === 'ALL') return SEEDED_HEALTH_TIMELINE;
-    return SEEDED_HEALTH_TIMELINE.filter(
+    const dynamicEvents: HealthTimelineEvent[] = (q1042?.auditTrail || [])
+      .filter((a) => !a.details.includes('Initial draft generated'))
+      .map((a, idx) => ({
+        id: `LIVE-Q1042-${idx}-${a.id}`,
+        timestamp: a.timestamp,
+        quotationId: 'Q-1042',
+        customerName: 'Acme Corporation',
+        eventType: (a.action.includes('Approved') || a.action.includes('Accepted')
+          ? 'TERMS_OFFERED'
+          : a.action.includes('Dispatched') || a.action.includes('Payment')
+          ? 'TERMS_OFFERED'
+          : 'POLICY_ESCALATION') as HealthTimelineEvent['eventType'],
+        severity: (a.action.includes('Approved') || a.action.includes('Payment') || a.action.includes('Confirmed') || a.action.includes('Dispatched')
+          ? 'INFO'
+          : 'HIGH') as HealthTimelineEvent['severity'],
+        headline: a.action,
+        ruleTriggered: 'LIVE GOVERNANCE LIFECYCLE',
+        details: `${a.details} (Actor: ${a.actor})`,
+        recommendedNextStep: q1042?.dealHealthScore === 100
+          ? 'Deal 100% healthy: Contract confirmed, fulfillment dispatched, and invoice settled.'
+          : 'Monitor contract progression through governance pipeline.',
+      }));
+
+    const combined = [...dynamicEvents, ...SEEDED_HEALTH_TIMELINE];
+    if (timelineFilter === 'ALL') return combined;
+    return combined.filter(
       (e) => e.quotationId.includes(timelineFilter) || e.customerName.toLowerCase().includes(timelineFilter.toLowerCase())
     );
-  }, [timelineFilter]);
+  }, [timelineFilter, q1042]);
 
   return (
     <div className="space-y-8 pb-16">
@@ -224,11 +254,69 @@ export default function DealHealthPage() {
           <div className="flex items-center gap-3 shrink-0">
             <div className="text-right">
               <div className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Average Deal Health</div>
-              <div className="text-2xl font-bold font-mono text-teal-400">{kpiData.avgHealthScore}/100</div>
+              <div className="text-2xl font-bold font-mono text-teal-400">
+                {q1042?.dealHealthScore === 100 ? 82 : kpiData.avgHealthScore}/100
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* LIVE SPOTLIGHT: Acme Corporation (Q-1042) State Banner */}
+      {q1042 && (
+        <div className="p-4 rounded-lg bg-white border border-slate-200 shadow-enterprise flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono font-bold text-sm text-slate-900">Q-1042 Spotlight</span>
+              <span className="text-slate-300">•</span>
+              <span className="text-xs font-semibold text-slate-700">{q1042.customerName}</span>
+              <TierBadge tier={q1042.customerTier} size="sm" />
+              <StatusBadge status={q1042.status} />
+              {q1042.fulfillmentStatus && (
+                <span className="bg-sky-50 text-sky-700 text-[10px] font-mono font-semibold px-2 py-0.5 rounded border border-sky-200">
+                  Fulfillment: {q1042.fulfillmentStatus}
+                </span>
+              )}
+              {inv1042 && (
+                <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded border ${
+                  inv1042.status === 'PAID'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                }`}>
+                  Invoice: {inv1042.status}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500">
+              {q1042.dealHealthScore === 100
+                ? '✅ Full contract lifecycle completed: Confirmed by Acme Corp, warehouse split dispatched, invoice paid and settled.'
+                : q1042.status === 'CONFIRMED'
+                ? 'Order confirmed. In-transit fulfillment dispatched. Awaiting final invoice settlement.'
+                : 'Active governance exception under evaluation. Sales manager and finance review required.'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-4 shrink-0">
+            <div className="text-right">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Deal Health</span>
+              <span className={`text-xl font-bold font-mono ${
+                (q1042.dealHealthScore || 45) >= 90
+                  ? 'text-emerald-600'
+                  : (q1042.dealHealthScore || 45) >= 70
+                  ? 'text-teal-600'
+                  : 'text-rose-600'
+              }`}>
+                {q1042.dealHealthScore || 45}/100
+              </span>
+            </div>
+            <Link href="/quotes/Q-1042">
+              <Button variant="outline" size="sm" className="text-xs h-8">
+                Inspect Q-1042
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* SECTION 1: Overall Deal Health KPIs */}
       <div>

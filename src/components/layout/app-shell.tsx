@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Activity,
   FileText,
@@ -58,6 +58,7 @@ interface AppShellProps {
 
 export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const pathname = usePathname();
+  const router = useRouter();
   const resetMutation = useResetDemoData();
   const { toast } = useToast();
   const { user, switchRole, logout } = useAuth();
@@ -66,10 +67,53 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Keyboard shortcut for Cmd+K / Ctrl+K
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        setIsSearchDropdownOpen(true);
+      }
+      if (e.key === 'Escape') {
+        setIsSearchDropdownOpen(false);
+        setSearchQuery('');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Filtered search results
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    const searchableItems = [
+      { id: 'Q-1042', title: 'Quotation Q-1042 (Laptop Pro + Onsite Setup)', subtitle: 'Acme Corporation • $3,650.24 • Exception Governance', href: '/quotes/Q-1042', category: 'Deal' },
+      { id: 'Q-1039', title: 'Quotation Q-1039 (Laptop Pro 14)', subtitle: 'Beta Technologies • $14,400.00 • Approved', href: '/quotes/Q-1039', category: 'Deal' },
+      { id: 'Q-1028', title: 'Quotation Q-1028 (Telemetry Workstations)', subtitle: 'Zenith Industries • $15,100.00 • Idle 9 Days', href: '/quotes/Q-1028', category: 'Deal' },
+      { id: 'Q-1052', title: 'Quotation Q-1052 (High Discount Anomaly)', subtitle: 'Delta Solutions • $19,000.00 • +14 pts Excess', href: '/quotes/Q-1052', category: 'Deal' },
+      { id: 'CUST-01', title: 'Acme Corporation (Customer 360)', subtitle: 'Gold Tier (15% Cap) • Strategic Enterprise Account', href: '/customers/CUST-01', category: 'Account' },
+      { id: 'CUST-02', title: 'Beta Technologies (Customer 360)', subtitle: 'Silver Tier (10% Cap) • Cloud Infrastructure Client', href: '/customers/CUST-02', category: 'Account' },
+      { id: 'INV-1042', title: 'Invoice INV-1042 ($3,650.24)', subtitle: 'Acme Corporation • Pre-Shipment Fulfillment Release', href: '/invoices/INV-1042', category: 'Invoice' },
+      { id: 'FUL-801', title: 'Fulfillment Order FUL-801', subtitle: 'Acme Corporation • Main WH (18) + East Depot (6) Split', href: '/fulfillment/FUL-801', category: 'Fulfillment' },
+      { id: 'RULES', title: 'Discount Rules & Policy Caps', subtitle: 'min(Customer Tier, Product Category) Governance Config', href: '/settings/discount-rules', category: 'Settings' },
+      { id: 'HEALTH', title: 'Deal Health & Anomaly Radar', subtitle: 'Deterministic Governance Intelligence & Velocity Watchdog', href: '/deal-health', category: 'Intelligence' },
+      { id: 'REPORTS', title: 'Commercial Revenue Reports', subtitle: 'Pipeline Conversion, MRR Realization & Top Upsells', href: '/reports', category: 'Reports' },
+    ];
+
+    return searchableItems.filter(
+      (item) => item.title.toLowerCase().includes(q) || item.subtitle.toLowerCase().includes(q) || item.id.toLowerCase().includes(q)
+    );
+  }, [searchQuery]);
 
   // Close mobile menu whenever the route changes
   useEffect(() => {
     setIsMobileMenuOpen(false);
+    setIsSearchDropdownOpen(false);
   }, [pathname]);
 
   // Distraction-free full-screen layout for authentication pages
@@ -371,20 +415,72 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             </div>
 
             {/* Global Search / Action Bar */}
-            <div className="hidden md:flex items-center flex-1 max-w-md mx-6">
+            <div className="hidden md:flex items-center flex-1 max-w-md mx-6 relative">
               <div className="relative w-full">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                 <input
+                  ref={searchInputRef}
                   type="text"
-                  placeholder="Search deals (e.g. Q-1042), accounts, invoices..."
+                  placeholder="Search deals (e.g. Q-1042), accounts, rules..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setIsSearchDropdownOpen(true);
+                  }}
+                  onFocus={() => setIsSearchDropdownOpen(true)}
                   className="w-full pl-9 pr-12 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white text-slate-800 placeholder-slate-400 transition"
                 />
                 <div className="absolute right-2.5 top-2 flex items-center gap-0.5 text-[10px] font-mono text-slate-400 bg-slate-200/70 px-1.5 py-0.5 rounded border border-slate-300">
                   <Command className="w-2.5 h-2.5" /> K
                 </div>
               </div>
+
+              {/* Instant Search Results Palette Dropdown */}
+              {isSearchDropdownOpen && searchQuery.trim().length > 0 && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setIsSearchDropdownOpen(false)}
+                  />
+                  <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-lg shadow-enterprise-lg z-50 overflow-hidden max-h-80 overflow-y-auto">
+                    <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[11px] font-semibold text-slate-500">
+                      <span>Quick Navigation Results</span>
+                      <span className="font-mono text-[10px] text-slate-400">ESC to close</span>
+                    </div>
+
+                    {searchResults.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-slate-400">
+                        No deals, accounts, or records matching &ldquo;{searchQuery}&rdquo;
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-100">
+                        {searchResults.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => {
+                              router.push(item.href);
+                              setIsSearchDropdownOpen(false);
+                              setSearchQuery('');
+                            }}
+                            className="w-full text-left px-3.5 py-2.5 hover:bg-teal-50/60 transition flex items-center justify-between group cursor-pointer"
+                          >
+                            <div className="space-y-0.5 pr-2">
+                              <div className="text-xs font-semibold text-slate-900 group-hover:text-teal-900 flex items-center gap-1.5">
+                                <span>{item.title}</span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 truncate">{item.subtitle}</p>
+                            </div>
+                            <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 group-hover:bg-teal-100 group-hover:text-teal-800 shrink-0">
+                              {item.category}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Quick Role Switcher Pill & Actions */}

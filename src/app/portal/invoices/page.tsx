@@ -9,6 +9,7 @@ import {
   DollarSign,
   Building,
   FileText,
+  Lock,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
@@ -161,15 +162,28 @@ export default function CustomerInvoicesPage() {
                         PDF
                       </Button>
                       {inv.status === 'UNPAID' && (
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => handlePay(inv.id)}
-                          loading={updateInvoiceStatus.isPending}
-                          className="text-xs"
-                        >
-                          Pay Online
-                        </Button>
+                        !inv.isShipped ? (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled
+                            className="text-xs opacity-60 cursor-not-allowed gap-1"
+                            title="Payment locked until goods are dispatched from warehouse"
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                            Pre-Shipment Hold
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => handlePay(inv.id)}
+                            loading={updateInvoiceStatus.isPending}
+                            className="text-xs"
+                          >
+                            Pay Online
+                          </Button>
+                        )
                       )}
                     </div>
                   </TableCell>

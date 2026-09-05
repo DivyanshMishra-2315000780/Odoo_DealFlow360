@@ -166,53 +166,76 @@ export default function CustomerPortalOverview() {
           </div>
 
           {/* Highlight Card for Q-1042 */}
-          <Card className="border-teal-200 bg-white shadow-enterprise">
-            <CardHeader className="p-5 pb-3 flex-row items-center justify-between space-y-0 bg-teal-50/20 border-b border-teal-100">
-              <div className="flex items-center gap-2.5">
-                <span className="font-mono font-bold text-sm text-slate-900">Q-1042</span>
-                <StatusBadge status="PENDING_FINANCE_APPROVAL" />
-                <RiskBadge level="HIGH" />
-              </div>
-              <span className="text-xs text-slate-500 font-mono">Issued: Sept 2, 2026</span>
-            </CardHeader>
-            <CardContent className="p-5 space-y-4">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">
-                  Workstation Fleet Refresh & Onsite Deployment
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  15 Enterprise Laptop Pro 14 workstations, 15 Thunderbolt 4 Docking Stations, and 4 Onsite Setup integration packages.
-                </p>
-              </div>
+          {(() => {
+            const primaryDeal = quotations.find((q) => q.id === 'Q-1042') || myQuotations[0];
+            if (!primaryDeal) return null;
 
-              {/* Status Notice */}
-              <div className="p-3 rounded-md bg-amber-50 border border-amber-200 text-xs text-amber-950 space-y-1">
-                <div className="flex items-center gap-1.5 font-bold">
-                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Special Discount Approval in Progress</span>
-                </div>
-                <p className="text-slate-700 text-[11px] leading-relaxed">
-                  Your proposed 18% discount on Onsite Setup exceeds standard category limits (10%). Account Executive Marcus Vance has escalated this to Finance Controller Sarah Sterling for commercial override sign-off.
-                </p>
-              </div>
+            return (
+              <Card className="border-teal-200 bg-white shadow-enterprise">
+                <CardHeader className="p-5 pb-3 flex-row items-center justify-between space-y-0 bg-teal-50/20 border-b border-teal-100">
+                  <div className="flex items-center gap-2.5">
+                    <span className="font-mono font-bold text-sm text-slate-900">{primaryDeal.id}</span>
+                    <StatusBadge status={primaryDeal.status} />
+                    <RiskBadge level={primaryDeal.riskDiagnosis?.level || 'HIGH'} />
+                  </div>
+                  <span className="text-xs text-slate-500 font-mono">
+                    Created: {new Date(primaryDeal.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                </CardHeader>
+                <CardContent className="p-5 space-y-4">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">
+                      {primaryDeal.title}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {primaryDeal.items.map((i) => `${i.quantity}x ${i.productName}`).join(', ')}
+                    </p>
+                  </div>
 
-              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                <div>
-                  <span className="text-[11px] text-slate-400">Total Net Amount:</span>
-                  <p className="text-lg font-bold font-mono text-teal-700">$25,699.00</p>
-                </div>
+                  {/* Status Notice */}
+                  <div className="p-3 rounded-md bg-amber-50 border border-amber-200 text-xs text-amber-950 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>
+                        {primaryDeal.status === 'APPROVED'
+                          ? 'Commercial Exception Approved by Finance'
+                          : primaryDeal.status === 'CONFIRMED'
+                          ? 'Deal Confirmed — Handed Off to Fulfillment'
+                          : primaryDeal.status === 'DRAFT'
+                          ? 'Quotation Drafted — Pending Commercial Review'
+                          : 'Special Discount Approval in Progress'}
+                      </span>
+                    </div>
+                    <p className="text-slate-700 text-[11px] leading-relaxed">
+                      {primaryDeal.status === 'APPROVED'
+                        ? 'Terms approved by Sales Manager and Finance Controller. Quotation is unlocked for client acceptance.'
+                        : primaryDeal.status === 'CONFIRMED'
+                        ? 'Contract terms confirmed. Dispatched to warehouse fulfillment.'
+                        : 'Onsite Setup requested discount (18%) exceeds standard category limit (10%). Escalated for dual approval.'}
+                    </p>
+                  </div>
 
-                <div className="flex gap-2">
-                  <Link href="/portal/quotations/Q-1042">
-                    <Button variant="default" size="sm" className="gap-1.5">
-                      Review Deal & Negotiate
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                    <div>
+                      <span className="text-[11px] text-slate-400">Total Net Amount:</span>
+                      <p className="text-lg font-bold font-mono text-teal-700">
+                        {formatCurrency(primaryDeal.grandTotal)}
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Link href={`/portal/quotations/${primaryDeal.id}`}>
+                        <Button variant="default" size="sm" className="gap-1.5">
+                          Review Deal & Negotiate
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
         </div>
 
         {/* Recent Messages & Account Director */}

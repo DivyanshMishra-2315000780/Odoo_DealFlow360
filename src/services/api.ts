@@ -75,9 +75,17 @@ export const dealflowApi = {
     id: string,
     status: QuotationStatus,
     note?: string,
-    actor?: string
+    actor?: string,
+    meta?: {
+      salesManagerApproved?: boolean;
+      financeApproved?: boolean;
+      reapprovalRequired?: boolean;
+      reapprovalReason?: string;
+      deliveryDate?: string;
+      dealHealthScore?: number;
+    }
   ): Promise<Quotation> {
-    const updated = mockStore.updateQuotationStatus(id, status, note, actor);
+    const updated = mockStore.updateQuotationStatus(id, status, note, actor, meta);
     if (!updated) {
       throw new Error(`Quotation ${id} not found`);
     }

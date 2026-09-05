@@ -75,14 +75,16 @@ export default function ApprovalDecisionPage() {
   const timelineStages = useMemo(() => {
     if (!quotation) return [];
 
-    const isFinancePending =
-      quotation.status === 'PENDING_APPROVAL' ||
-      quotation.status === 'PENDING_FINANCE_APPROVAL' ||
-      quotation.status === 'PENDING_DISCOUNT_APPROVAL';
     const isReturned = quotation.status === 'RETURNED';
     const isApproved = quotation.status === 'APPROVED';
     const isConfirmed = quotation.status === 'CONFIRMED' || quotation.status === 'FULFILLED';
     const isRejected = quotation.status === 'REJECTED';
+
+    const smDone = Boolean(quotation.salesManagerApproved);
+    const finDone = isApproved || isConfirmed;
+
+    const smCurrent = !smDone && !isReturned && !isRejected && !isApproved && !isConfirmed;
+    const finCurrent = smDone && !finDone && !isReturned && !isRejected;
 
     return [
       {
@@ -101,32 +103,39 @@ export default function ApprovalDecisionPage() {
         id: 'sales_manager',
         label: 'Sales Manager',
         actor: 'Marcus Vance / Deal Desk',
-        date: new Date(quotation.createdAt).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-        }),
-        status: 'COMPLETED' as const,
-        description: 'Endorsed deal strategic necessity and tier alignment.',
-      },
-      {
-        id: 'finance',
-        label: 'Finance',
-        actor: 'Sarah Sterling (Finance Controller)',
-        date: isFinancePending ? 'Awaiting Action' : 'Reviewed',
+        date: smDone ? 'Endorsed' : 'Awaiting Endorsement',
         status: isRejected
           ? ('REJECTED' as const)
           : isReturned
           ? ('RETURNED' as const)
-          : isFinancePending
+          : smDone
+          ? ('COMPLETED' as const)
+          : smCurrent
           ? ('CURRENT' as const)
-          : ('COMPLETED' as const),
-        description: isFinancePending
-          ? 'Mandatory sign-off required for discount ceiling override.'
+          : ('UPCOMING' as const),
+        description: smDone
+          ? 'Endorsed commercial necessity and tier alignment.'
+          : 'Awaiting commercial sales manager review & endorsement.',
+      },
+      {
+        id: 'finance',
+        label: 'Finance Officer',
+        actor: 'Sarah Sterling (Finance Controller)',
+        date: finDone ? 'Signed Off' : finCurrent ? 'Awaiting Action' : 'Pending SM Sign-Off',
+        status: isRejected
+          ? ('REJECTED' as const)
           : isReturned
-          ? 'Returned to account team for margin restructuring.'
-          : isRejected
-          ? 'Rejected due to excessive margin dilution.'
-          : 'Approved within executive margin exceptions.',
+          ? ('RETURNED' as const)
+          : finDone
+          ? ('COMPLETED' as const)
+          : finCurrent
+          ? ('CURRENT' as const)
+          : ('UPCOMING' as const),
+        description: finDone
+          ? 'Approved within executive margin exceptions.'
+          : finCurrent
+          ? 'Mandatory sign-off required for discount ceiling override.'
+          : 'Pending preceding Sales Manager sign-off.',
       },
       {
         id: 'confirmed',
@@ -150,26 +159,56 @@ export default function ApprovalDecisionPage() {
 
     setIsProcessing(true);
     setReasonError('');
-    const actor = user?.name ? `${user.name} (${user.role})` : 'Sarah Sterling (Finance Controller)';
+
+    const isSalesManager = user?.role === 'SALES_MANAGER';
+    const isFinanceOfficer = user?.role === 'FINANCE_OFFICER';
+
+    // If Sales Manager is approving and deal requires dual approval
+    const needsDualApproval = quotation.riskDiagnosis.level === 'HIGH' || quotation.riskDiagnosis.level === 'CRITICAL';
+    const isStep1ManagerApproval = decision === 'APPROVED' && (!quotation.salesManagerApproved && (isSalesManager || !isFinanceOfficer)) && needsDualApproval;
 
     try {
-      await updateStatusMutation.mutateAsync({
-        id: quotation.id,
-        status: decision,
-        note: dialogReason.trim() || `Quotation ${decision.toLowerCase()} by authorized controller.`,
-        actor,
-      });
+      if (isStep1ManagerApproval) {
+        await updateStatusMutation.mutateAsync({
+          id: quotation.id,
+          status: 'PENDING_FINANCE_APPROVAL',
+          note: dialogReason.trim() || 'Sales Manager approved deal terms and tier concessions. Escalated to Finance Controller for final sign-off.',
+          actor: user?.name ? `${user.name} (Sales Manager)` : 'Marcus Vance (Sales Manager)',
+          meta: {
+            salesManagerApproved: true,
+          },
+        });
 
-      toast({
-        title:
-          decision === 'APPROVED'
-            ? 'Quotation Approved'
-            : decision === 'RETURNED'
-            ? 'Returned for Revision'
-            : 'Quotation Rejected',
-        description: `Quotation ${quotation.id} has been transitioned to ${decision.replace(/_/g, ' ')}.`,
-        type: decision === 'APPROVED' ? 'success' : decision === 'RETURNED' ? 'warning' : 'error',
-      });
+        toast({
+          title: 'Sales Manager Endorsement Recorded',
+          description: `Quotation ${quotation.id} endorsed. Escalated to Finance Controller Sarah Sterling for final approval.`,
+          type: 'success',
+        });
+      } else {
+        await updateStatusMutation.mutateAsync({
+          id: quotation.id,
+          status: decision,
+          note: dialogReason.trim() || (decision === 'APPROVED' ? 'Finance Controller granted commercial exception sign-off.' : `Quotation ${decision.toLowerCase()} by authorized controller.`),
+          actor: user?.name ? `${user.name} (${user.role})` : 'Sarah Sterling (Finance Controller)',
+          meta: {
+            salesManagerApproved: true,
+            financeApproved: decision === 'APPROVED',
+            reapprovalRequired: false,
+            reapprovalReason: undefined,
+          },
+        });
+
+        toast({
+          title:
+            decision === 'APPROVED'
+              ? 'Quotation Approved'
+              : decision === 'RETURNED'
+              ? 'Returned for Revision'
+              : 'Quotation Rejected',
+          description: `Quotation ${quotation.id} has been transitioned to ${decision.replace(/_/g, ' ')}.`,
+          type: decision === 'APPROVED' ? 'success' : decision === 'RETURNED' ? 'warning' : 'error',
+        });
+      }
 
       setActiveDialog(null);
       setDialogReason('');
@@ -245,6 +284,26 @@ export default function ApprovalDecisionPage() {
           <RiskBadge level={quotation.riskDiagnosis.level} />
         </div>
       </div>
+
+      {/* RE-APPROVAL REQUIRED BANNER (STEP 9 & 10) */}
+      {quotation.reapprovalRequired && (
+        <div className="p-4 rounded-lg bg-amber-50 border border-amber-300 text-xs text-amber-950 flex items-start gap-3 shadow-enterprise">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <strong className="text-sm font-bold text-amber-950">
+                ⚡ Customer Renegotiation: Re-Approval Required
+              </strong>
+              <span className="bg-amber-200 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                Re-Evaluation
+              </span>
+            </div>
+            <p className="text-slate-700 leading-relaxed">
+              {quotation.reapprovalReason || 'Customer requested counter-proposal exceeding policy limits. Re-approval required from Sales Manager and Finance Officer before quotation can be confirmed.'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* TOP DECISION HERO SECTION */}
       <Card className="bg-white border-slate-200 shadow-enterprise overflow-hidden">

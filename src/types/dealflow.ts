@@ -181,6 +181,11 @@ export interface Quotation {
   owner?: string; // Assigned Sales Rep / AE
   priceList?: string;
   deliveryDate?: string;
+  salesManagerApproved?: boolean;
+  financeApproved?: boolean;
+  reapprovalRequired?: boolean;
+  reapprovalReason?: string;
+  fulfillmentStatus?: string;
 }
 
 export type InvoiceStatus = 'UNPAID' | 'PAID' | 'PARTIALLY_PAID' | 'OVERDUE';

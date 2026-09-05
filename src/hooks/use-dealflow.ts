@@ -159,6 +159,8 @@ export function useCreateShipment() {
     }) => dealflowApi.createShipment(id, carrier, trackingNumber),
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.FULFILLMENT });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INVOICES });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUOTATIONS });
       queryClient.setQueryData(['fulfillment', updated.id], updated);
     },
   });
@@ -173,14 +175,24 @@ export function useUpdateQuotationStatus() {
       status,
       note,
       actor,
+      meta,
     }: {
       id: string;
       status: QuotationStatus;
       note?: string;
       actor?: string;
-    }) => dealflowApi.updateQuotationStatus(id, status, note, actor),
+      meta?: {
+        salesManagerApproved?: boolean;
+        financeApproved?: boolean;
+        reapprovalRequired?: boolean;
+        reapprovalReason?: string;
+        deliveryDate?: string;
+        dealHealthScore?: number;
+      };
+    }) => dealflowApi.updateQuotationStatus(id, status, note, actor, meta),
     onSuccess: (updatedQuotation) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUOTATIONS });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INVOICES });
       queryClient.setQueryData(QUERY_KEYS.QUOTATION(updatedQuotation.id), updatedQuotation);
     },
   });
@@ -213,6 +225,7 @@ export function useUpdateInvoiceStatus() {
     }) => dealflowApi.updateInvoiceStatus(id, status, paymentMethod),
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INVOICES });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUOTATIONS });
       queryClient.setQueryData(QUERY_KEYS.INVOICE(updated.id), updated);
     },
   });
@@ -235,6 +248,7 @@ export function useRecordInvoicePayment() {
     }) => dealflowApi.recordInvoicePayment(id, amount, paymentMethod, paymentReference),
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INVOICES });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUOTATIONS });
       queryClient.setQueryData(QUERY_KEYS.INVOICE(updated.id), updated);
     },
   });
