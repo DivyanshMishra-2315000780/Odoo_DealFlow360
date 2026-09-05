@@ -1,33 +1,56 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  Activity,
   FileText,
   ShieldCheck,
-  RotateCcw,
-  Sparkles,
-  Users,
   CreditCard,
   Truck,
-  Search,
-  Bell,
-  Activity,
-  Layers,
-  CheckCircle,
-  Command,
   RefreshCcw,
   HeartPulse,
   Package,
   Tag,
   BarChart3,
+  SlidersHorizontal,
+  Sparkles,
+  Users,
+  UserCheck,
+  User,
+  DollarSign,
+  LayoutDashboard,
+  Search,
+  Bell,
+  Command,
+  RotateCcw,
+  Menu,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  CheckCircle,
+  Layers,
+  LogOut,
+  Shield,
+  HelpCircle,
 } from 'lucide-react';
 import { useResetDemoData } from '@/hooks/use-dealflow';
 import { useToast } from '@/components/providers/query-provider';
-import { useAuth } from '@/lib/auth';
+import { useAuth, normalizeRole, getRoleMeta, DEMO_ACCOUNTS } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { UserRole } from '@/types/auth';
+
+interface NavItemDef {
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge?: string;
+  alert?: boolean;
+  tooltip: string;
+}
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -37,13 +60,241 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const pathname = usePathname();
   const resetMutation = useResetDemoData();
   const { toast } = useToast();
-  const { user, logout } = useAuth();
-  const [searchQuery, setSearchQuery] = useState('');
+  const { user, switchRole, logout } = useAuth();
 
-  // Distraction-free full-screen layout for authentication & dedicated customer portal
-  if (pathname === '/login' || pathname === '/signup' || pathname.startsWith('/portal')) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
+
+  // Close mobile menu whenever the route changes
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [pathname]);
+
+  // Distraction-free full-screen layout for authentication pages
+  if (pathname === '/login' || pathname === '/signup') {
     return <>{children}</>;
   }
+
+  // Active user role normalization
+  const currentRole = normalizeRole(user?.role);
+  const roleMeta = getRoleMeta(currentRole);
+
+  // Define role-specific navigation menus
+  const roleNavItems: NavItemDef[] = useMemo(() => {
+    switch (currentRole) {
+      case 'CUSTOMER':
+        return [
+          {
+            label: 'Portal Overview',
+            href: '/portal',
+            icon: LayoutDashboard,
+            badge: 'Client',
+            tooltip: 'Customer procurement overview, active deals & messages',
+          },
+          {
+            label: 'My Quotations',
+            href: '/portal/quotations',
+            icon: FileText,
+            badge: 'Live',
+            tooltip: 'Review corporate quotations & submit counter-offers',
+          },
+          {
+            label: 'Commercial Invoices',
+            href: '/portal/invoices',
+            icon: CreditCard,
+            tooltip: 'View statements & execute instant online ACH settlements',
+          },
+          {
+            label: 'Subscriptions',
+            href: '/portal/profile#subscriptions',
+            icon: RefreshCcw,
+            tooltip: 'Active SaaS software seats & SLA recurring agreements',
+          },
+          {
+            label: 'Company Profile',
+            href: '/portal/profile',
+            icon: User,
+            tooltip: 'System-assigned customer tier, spend metrics & credit standing',
+          },
+        ];
+
+      case 'SALES_EXECUTIVE':
+        return [
+          {
+            label: 'Deal Dashboard',
+            href: '/',
+            icon: Activity,
+            tooltip: 'Executive pipeline overview & immediate action required',
+          },
+          {
+            label: 'Quotations',
+            href: '/quotes',
+            icon: FileText,
+            badge: 'Live',
+            tooltip: 'Create and track multi-line enterprise quotations',
+          },
+          {
+            label: 'Customers',
+            href: '/customers',
+            icon: Users,
+            tooltip: 'Customer 360 command center, health gauges & account managers',
+          },
+          {
+            label: 'Fulfillment',
+            href: '/fulfillment',
+            icon: Truck,
+            tooltip: 'Warehouse allocation, dispatch readiness & split shipments',
+          },
+          {
+            label: 'Subscriptions',
+            href: '/subscriptions',
+            icon: RefreshCcw,
+            tooltip: 'Commercial subscriptions, multi-year contracts & MRR metrics',
+          },
+          {
+            label: 'Invoices',
+            href: '/invoices',
+            icon: CreditCard,
+            tooltip: 'Commercial cashflow ledger & pre-shipment invoice verification',
+          },
+          {
+            label: 'Deal Health',
+            href: '/deal-health',
+            icon: HeartPulse,
+            alert: true,
+            tooltip: 'Velocity watchdog: stalled deals, discount anomalies & bottlenecks',
+          },
+        ];
+
+      case 'SALES_MANAGER':
+        return [
+          {
+            label: 'Deal Dashboard',
+            href: '/',
+            icon: Activity,
+            tooltip: 'Pipeline governance & commercial deal velocity command center',
+          },
+          {
+            label: 'Quotations',
+            href: '/quotes',
+            icon: FileText,
+            badge: 'Live',
+            tooltip: 'All company quotations across sales representatives',
+          },
+          {
+            label: 'Discount Approvals',
+            href: '/approvals',
+            icon: ShieldCheck,
+            alert: true,
+            tooltip: 'Commercial approval center: evaluate margin exceptions & sign off',
+          },
+          {
+            label: 'Customers',
+            href: '/customers',
+            icon: Users,
+            tooltip: 'Strategic account governance & customer tier qualification',
+          },
+          {
+            label: 'Deal Health',
+            href: '/deal-health',
+            icon: HeartPulse,
+            alert: true,
+            tooltip: 'Deterministic anomaly radar: stalled velocity & margin leaks',
+          },
+          {
+            label: 'Reports & Analytics',
+            href: '/reports',
+            icon: BarChart3,
+            tooltip: 'Pipeline win-rates, SLA turnaround velocity & top upsells',
+          },
+        ];
+
+      case 'FINANCE_OFFICER':
+        return [
+          {
+            label: 'Finance Dashboard',
+            href: '/',
+            icon: Activity,
+            tooltip: 'Executive financial summary, cash conversion & exceptions',
+          },
+          {
+            label: 'Discount Approvals',
+            href: '/approvals',
+            icon: ShieldCheck,
+            alert: true,
+            tooltip: 'Critical risk discount sign-offs & gross margin protection',
+          },
+          {
+            label: 'Invoices & Cashflow',
+            href: '/invoices',
+            icon: CreditCard,
+            tooltip: 'Commercial receivables, pre-shipment hold & settlement ledger',
+          },
+          {
+            label: 'Payments & Settlement',
+            href: '/invoices?tab=settlements',
+            icon: DollarSign,
+            tooltip: 'ACH wire receipts, partial payments & reconciled deposits',
+          },
+          {
+            label: 'Revenue Reports',
+            href: '/reports',
+            icon: BarChart3,
+            tooltip: 'Realized revenue trajectory, MRR run-rate & margin retention',
+          },
+        ];
+
+      case 'ADMIN':
+      default:
+        return [
+          {
+            label: 'Executive Dashboard',
+            href: '/',
+            icon: Activity,
+            tooltip: 'DealFlow360 platform health & governance overview',
+          },
+          {
+            label: 'Team & Stakeholders',
+            href: '/customers',
+            icon: UserCheck,
+            tooltip: 'Account executive rosters, sales desks & assignees',
+          },
+          {
+            label: 'Customer Accounts',
+            href: '/customers',
+            icon: Users,
+            tooltip: 'Enterprise client ledger & system-assigned qualification',
+          },
+          {
+            label: 'Product Catalog',
+            href: '/products',
+            icon: Package,
+            tooltip: 'Hardware and service catalog, variant matrix & base prices',
+          },
+          {
+            label: 'Price Lists',
+            href: '/price-lists',
+            icon: Tag,
+            tooltip: 'Multi-currency schedules for Bronze, Silver, and Gold tiers',
+          },
+          {
+            label: 'Commercial Reports',
+            href: '/reports',
+            icon: BarChart3,
+            tooltip: 'Aggregate commercial intelligence, pipeline velocity & conversions',
+          },
+          {
+            label: 'Discount Rules',
+            href: '/settings/discount-rules',
+            icon: SlidersHorizontal,
+            badge: 'Admin',
+            tooltip: 'Configure tier discount caps, category ceilings & workflow rules',
+          },
+        ];
+    }
+  }, [currentRole]);
 
   const handleResetData = async () => {
     try {
@@ -62,20 +313,15 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     }
   };
 
-  const navItems = [
-    { label: 'Deal Overview', href: '/', icon: Activity },
-    { label: 'Quotations', href: '/quotes', icon: FileText, badge: 'Live' },
-    { label: 'Discount Approvals', href: '/approvals', icon: ShieldCheck, alert: true },
-    { label: 'Invoices & Cashflow', href: '/invoices', icon: CreditCard },
-    { label: 'Fulfillment & Logistics', href: '/fulfillment', icon: Truck },
-    { label: 'Subscriptions', href: '/subscriptions', icon: RefreshCcw },
-    { label: 'Deal Health', href: '/deal-health', icon: HeartPulse, alert: true },
-    { label: 'Products', href: '/products', icon: Package },
-    { label: 'Price Lists', href: '/price-lists', icon: Tag },
-    { label: 'Customers', href: '/customers', icon: Users },
-    { label: 'Reports & Analytics', href: '/reports', icon: BarChart3 },
-    { label: 'Client Portal', href: '/portal', icon: Sparkles, badge: 'Client' },
-  ];
+  const handleRoleSwitch = (newRole: UserRole) => {
+    switchRole(newRole);
+    setIsRoleDropdownOpen(false);
+    toast({
+      title: 'Active Role Switched',
+      description: `Switched perspective to ${newRole.replace(/_/g, ' ')}. Navigation updated.`,
+      type: 'info',
+    });
+  };
 
   const workflowSteps = [
     'Quotation',
@@ -91,13 +337,22 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 selection:bg-teal-100 selection:text-teal-900">
-      {/* Top Header: Enterprise Deal Lifecycle Progress Indicator */}
+      {/* Top Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-enterprise">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            {/* Logo and Brand */}
-            <div className="flex items-center gap-6">
-              <Link href="/" className="flex items-center gap-3 group">
+            {/* Mobile Menu Trigger & Logo */}
+            <div className="flex items-center gap-3 sm:gap-6">
+              <button
+                type="button"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="md:hidden p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition cursor-pointer"
+                aria-label="Toggle navigation drawer"
+              >
+                {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </button>
+
+              <Link href={currentRole === 'CUSTOMER' ? '/portal' : '/'} className="flex items-center gap-3 group">
                 <div className="w-9 h-9 rounded-lg bg-teal-600 flex items-center justify-center text-white shadow-enterprise group-hover:bg-teal-700 transition">
                   <Sparkles className="w-5 h-5" />
                 </div>
@@ -116,7 +371,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             </div>
 
             {/* Global Search / Action Bar */}
-            <div className="hidden md:flex items-center flex-1 max-w-md mx-8">
+            <div className="hidden md:flex items-center flex-1 max-w-md mx-6">
               <div className="relative w-full">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                 <input
@@ -132,22 +387,74 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               </div>
             </div>
 
-            {/* Quick Actions & Demo Reset */}
-            <div className="flex items-center gap-3">
+            {/* Quick Role Switcher Pill & Actions */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Role Switcher Dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition cursor-pointer shadow-2xs hover:opacity-90 ${roleMeta.badgeClass}`}
+                  title="Click to switch perspective between 5 user roles"
+                >
+                  <span className={`w-2 h-2 rounded-full ${roleMeta.dotColor}`} />
+                  <span className="hidden sm:inline">{roleMeta.label}</span>
+                  <span className="sm:hidden">{roleMeta.label.split(' ')[0]}</span>
+                  <ChevronDown className="w-3 h-3 text-slate-500" />
+                </button>
+
+                {isRoleDropdownOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setIsRoleDropdownOpen(false)}
+                    />
+                    <div className="absolute right-0 mt-2 w-64 rounded-lg bg-white border border-slate-200 shadow-enterprise-lg z-50 p-2 text-xs animate-in fade-in-0 zoom-in-95 duration-150">
+                      <div className="px-2.5 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-1">
+                        Switch Demo Role
+                      </div>
+                      {DEMO_ACCOUNTS.map((acc) => {
+                        const isSelected = normalizeRole(acc.role) === currentRole;
+                        return (
+                          <button
+                            key={acc.id}
+                            type="button"
+                            onClick={() => handleRoleSwitch(acc.role as UserRole)}
+                            className={`w-full text-left px-2.5 py-2 rounded-md transition flex flex-col gap-0.5 cursor-pointer ${
+                              isSelected
+                                ? 'bg-teal-50 text-teal-900 font-semibold'
+                                : 'text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-slate-900">{acc.roleLabel}</span>
+                              {isSelected && <CheckCircle className="w-3.5 h-3.5 text-teal-600" />}
+                            </div>
+                            <span className="text-[11px] text-slate-500 truncate">{acc.name} • {acc.company}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Demo Reset */}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleResetData}
                 loading={resetMutation.isPending}
                 title="Reset local demo data to default state"
-                className="hidden sm:inline-flex"
+                className="hidden sm:inline-flex text-slate-600 border-slate-300 hover:bg-slate-50"
               >
                 <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-                Reset Demo
+                <span className="hidden lg:inline">Reset Demo</span>
               </Button>
 
-              <div className="h-5 w-px bg-slate-200" />
+              <div className="h-5 w-px bg-slate-200 hidden sm:block" />
 
+              {/* Notifications */}
               <button
                 type="button"
                 className="relative p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-md transition cursor-pointer"
@@ -161,7 +468,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               <Link
                 href="/login"
                 title="Switch Account / Sign In"
-                className="flex items-center gap-2.5 pl-2 group"
+                className="flex items-center gap-2 pl-1 sm:pl-2 group"
               >
                 <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-semibold text-xs ring-2 ring-teal-500/20 shadow-2xs group-hover:ring-teal-500 transition">
                   {user?.name
@@ -171,14 +478,14 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                         .join('')
                         .substring(0, 2)
                         .toUpperCase()
-                    : 'MV'}
+                    : 'AP'}
                 </div>
-                <div className="hidden lg:block text-left">
+                <div className="hidden xl:block text-left">
                   <p className="text-xs font-semibold text-slate-800 leading-none group-hover:text-teal-700 transition">
-                    {user?.name || 'Marcus Vance'}
+                    {user?.name || 'Arthur Pendelton'}
                   </p>
                   <p className="text-[10px] text-teal-600 font-medium leading-tight mt-0.5">
-                    {user?.role?.replace(/_/g, ' ') || 'Deal Desk / Sales Ops'}
+                    {roleMeta.label}
                   </p>
                 </div>
               </Link>
@@ -215,90 +522,248 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
         </div>
       </header>
 
-      {/* Main Body */}
-      <div className="flex-1 flex max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-7 gap-8">
-        {/* Navigation Sidebar */}
-        <aside className="w-60 shrink-0 hidden md:block">
-          <nav className="sticky top-28 space-y-1.5">
-            <div className="px-3 pb-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-              Navigation
-            </div>
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive =
-                item.href === '/'
-                  ? pathname === '/'
-                  : item.href.startsWith('/#')
-                  ? pathname === '/'
-                  : pathname.startsWith(item.href);
-              return (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className={`flex items-center justify-between px-3 py-2 text-xs rounded-md font-medium transition ${
-                    isActive
-                      ? 'bg-teal-50 text-teal-900 font-semibold border-l-2 border-teal-600 shadow-enterprise'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Icon className={`w-4 h-4 ${isActive ? 'text-teal-600' : 'text-slate-400'}`} />
-                    <span>{item.label}</span>
-                  </div>
-                  {item.badge && (
-                    <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-medium">
-                      {item.badge}
-                    </span>
-                  )}
-                  {item.alert && (
-                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                  )}
-                </Link>
-              );
-            })}
-
-            {/* Policy Cheat-Sheet Card using Card primitive */}
-            <div className="pt-6">
-              <Card className="bg-white border-slate-200 shadow-enterprise">
-                <CardHeader className="p-3.5 pb-2 border-b border-slate-100 flex-row items-center justify-between space-y-0">
-                  <CardTitle className="text-xs font-semibold text-slate-800">
-                    Discount Caps
-                  </CardTitle>
-                  <span className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded font-medium border border-teal-200">
-                    Enforced
+      {/* Main Workspace Container */}
+      <div className="flex-1 flex max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-7 gap-6 lg:gap-8">
+        {/* Desktop Navigation Sidebar with Collapse Capability */}
+        <aside
+          className={`shrink-0 hidden md:block transition-all duration-200 ${
+            isCollapsed ? 'w-18' : 'w-64'
+          }`}
+        >
+          <div className="sticky top-28 space-y-4">
+            {/* Sidebar Header & Collapse Toggle */}
+            <div className="flex items-center justify-between px-2 pb-1 border-b border-slate-200/80">
+              {!isCollapsed && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    {roleMeta.label} Menu
                   </span>
-                </CardHeader>
-                <CardContent className="p-3.5 pt-2.5 space-y-2 text-xs">
-                  <div className="space-y-1 text-[11px] text-slate-600">
-                    <div className="flex justify-between">
-                      <span>Hardware Limit:</span>
-                      <span className="font-semibold text-slate-800 font-mono">15% Max</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Services Limit:</span>
-                      <span className="font-semibold text-slate-800 font-mono">10% Max</span>
-                    </div>
-                    <div className="border-t border-slate-100 pt-1 flex justify-between">
-                      <span>Gold Tier:</span>
-                      <span className="font-semibold text-amber-700 font-mono">15% Cap</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Silver Tier:</span>
-                      <span className="font-semibold text-slate-700 font-mono">10% Cap</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Bronze Tier:</span>
-                      <span className="font-semibold text-orange-800 font-mono">5% Cap</span>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-slate-400 italic pt-1.5 border-t border-slate-100 leading-snug">
-                    Formula: min(Tier, Category). Tiers never bypass approval requirements.
-                  </p>
-                </CardContent>
-              </Card>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 transition cursor-pointer ml-auto"
+                title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar to icons'}
+                aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              >
+                {isCollapsed ? (
+                  <ChevronRight className="w-4 h-4" />
+                ) : (
+                  <ChevronLeft className="w-4 h-4" />
+                )}
+              </button>
             </div>
-          </nav>
+
+            {/* Navigation Links */}
+            <nav className="space-y-1">
+              {roleNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive =
+                  item.href === '/'
+                    ? pathname === '/'
+                    : item.href.startsWith('/#')
+                    ? pathname === '/'
+                    : pathname.startsWith(item.href.split('?')[0]);
+
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    title={item.tooltip}
+                    className={`flex items-center ${
+                      isCollapsed ? 'justify-center px-2 py-2.5' : 'justify-between px-3 py-2'
+                    } text-xs rounded-lg font-medium transition group relative ${
+                      isActive
+                        ? 'bg-teal-50 text-teal-900 font-bold border-l-3 border-teal-600 shadow-enterprise'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Icon
+                        className={`w-4 h-4 shrink-0 transition ${
+                          isActive ? 'text-teal-600' : 'text-slate-400 group-hover:text-slate-600'
+                        }`}
+                      />
+                      {!isCollapsed && <span className="truncate">{item.label}</span>}
+                    </div>
+
+                    {!isCollapsed && item.badge && (
+                      <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-medium shrink-0">
+                        {item.badge}
+                      </span>
+                    )}
+
+                    {item.alert && (
+                      <span
+                        className={`${
+                          isCollapsed
+                            ? 'absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 animate-pulse'
+                            : 'w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0'
+                        }`}
+                      />
+                    )}
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {/* Role Governance Badge & Helper Card (Expanded only) */}
+            {!isCollapsed && (
+              <div className="pt-4 space-y-3">
+                <div className={`p-3 rounded-lg border text-xs ${roleMeta.badgeClass}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5" />
+                      Role Security Profile
+                    </span>
+                    <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.2 rounded bg-white/70">
+                      Demo
+                    </span>
+                  </div>
+                  <p className="text-[11px] opacity-90 leading-snug">
+                    {roleMeta.description}
+                  </p>
+                </div>
+
+                {/* Quick Policy Reminder Card */}
+                <Card className="bg-white border-slate-200 shadow-enterprise">
+                  <CardHeader className="p-3 pb-2 border-b border-slate-100 flex-row items-center justify-between space-y-0">
+                    <CardTitle className="text-xs font-semibold text-slate-800">
+                      Discount Ceilings
+                    </CardTitle>
+                    <span className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded font-medium border border-teal-200">
+                      Active
+                    </span>
+                  </CardHeader>
+                  <CardContent className="p-3 pt-2 space-y-1.5 text-xs">
+                    <div className="flex justify-between text-[11px] text-slate-600">
+                      <span>Hardware:</span>
+                      <strong className="text-slate-800 font-mono">15% Max</strong>
+                    </div>
+                    <div className="flex justify-between text-[11px] text-slate-600">
+                      <span>Services:</span>
+                      <strong className="text-slate-800 font-mono">10% Max</strong>
+                    </div>
+                    <div className="pt-1 border-t border-slate-100 flex justify-between text-[11px] text-slate-600">
+                      <span>Formula:</span>
+                      <strong className="text-teal-700 font-mono">min(Tier, Cat)</strong>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </div>
         </aside>
+
+        {/* Mobile Navigation Drawer */}
+        {isMobileMenuOpen && (
+          <div className="fixed inset-0 z-50 md:hidden flex">
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
+              onClick={() => setIsMobileMenuOpen(false)}
+            />
+
+            {/* Slide-out Drawer */}
+            <div className="relative w-72 max-w-[80vw] bg-white h-full shadow-enterprise-lg flex flex-col p-4 z-10 overflow-y-auto">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-teal-600 text-white flex items-center justify-center font-bold">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-slate-900 text-sm">DealFlow360</span>
+                    <span className="text-[10px] text-teal-600 block font-medium">{roleMeta.label}</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-1 rounded text-slate-400 hover:text-slate-700"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Mobile Role Switcher */}
+              <div className="py-3 border-b border-slate-100">
+                <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1.5">
+                  Select Role View
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {DEMO_ACCOUNTS.map((acc) => (
+                    <button
+                      key={acc.id}
+                      type="button"
+                      onClick={() => handleRoleSwitch(acc.role as UserRole)}
+                      className={`text-left px-2 py-1.5 rounded text-xs transition ${
+                        normalizeRole(acc.role) === currentRole
+                          ? 'bg-teal-600 text-white font-bold'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {acc.roleLabel.split(' ')[0]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Mobile Nav Items */}
+              <nav className="py-3 space-y-1 flex-1">
+                {roleNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive =
+                    item.href === '/'
+                      ? pathname === '/'
+                      : item.href.startsWith('/#')
+                      ? pathname === '/'
+                      : pathname.startsWith(item.href.split('?')[0]);
+
+                  return (
+                    <Link
+                      key={item.label}
+                      href={item.href}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={`flex items-center justify-between px-3 py-2.5 text-xs rounded-lg font-medium transition ${
+                        isActive
+                          ? 'bg-teal-50 text-teal-900 font-bold border-l-3 border-teal-600'
+                          : 'text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Icon className={`w-4 h-4 ${isActive ? 'text-teal-600' : 'text-slate-400'}`} />
+                        <span>{item.label}</span>
+                      </div>
+                      {item.badge && (
+                        <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-medium">
+                          {item.badge}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </nav>
+
+              {/* Mobile Footer */}
+              <div className="pt-3 border-t border-slate-200 space-y-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResetData}
+                  className="w-full text-xs justify-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Reset Demo Data
+                </Button>
+
+                <div className="text-[11px] text-slate-400 text-center">
+                  Signed in as <strong>{user?.name}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Main Content Area */}
         <main className="flex-1 min-w-0">{children}</main>

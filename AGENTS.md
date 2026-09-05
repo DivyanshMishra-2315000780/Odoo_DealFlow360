@@ -78,6 +78,9 @@ src/
 │   │   └── page.tsx             # Multi-Tier Commercial Price Lists (Bronze 5%, Silver 10%, Gold 15%, USD/EUR toggle)
 │   ├── reports/
 │   │   └── page.tsx             # Commercial Reports & Revenue Intelligence (6 KPIs, 4 data charts, CSV/PDF export)
+│   ├── settings/
+│   │   └── discount-rules/
+│   │       └── page.tsx         # Admin Configuration for Discount Rules (Tiers, Categories, Workflow, Audit Log)
 │   ├── login/
 │   │   └── page.tsx             # Enterprise Login (show/hide password, quick-fill demo pills)
 │   ├── signup/
@@ -529,6 +532,44 @@ $$\text{Effective Limit} = \min(\text{Customer Tier Limit}, \text{Product Catego
 6. **Actionable Executive Recommendations**:
    - 3 automated strategic suggestions: Upselling Care Plan 2yr, single-click auto-approvals for sub-3% concessions, and Net 10 early cash collection incentives.
 
+### O. Admin Configuration for Discount Rules ([`/settings/discount-rules`](file:///E:/Tidnatum/src/app/settings/discount-rules/page.tsx))
+1. **Core Formula Callout**:
+   $$\text{Effective Discount Limit} = \min(\text{Customer Tier Limit}, \text{Product Category Limit})$$
+   - Explicit callout: **Customer tier priority never bypasses product category ceilings**. Gold standing allows up to 15% on Hardware, but strictly caps at 10% on Services.
+2. **Live Policy Ceilings**:
+   - *Customer Tier Rules*: Bronze (5%), Silver (10%), Gold (15%).
+   - *Category Rules*: Hardware (15%), Services (10%).
+3. **Workflow Approval Escalation Rules**:
+   - *Within Limit*: $\le \text{Effective Limit} \implies$ **No approval required** (Straight-Through Processing).
+   - *Over Limit*: $> \text{Effective Limit}$ (up to +5% excess points) $\implies$ **Sales Manager sign-off**.
+   - *High Risk*: $> +5\%$ excess points OR deal discount $> \$15,000 \implies$ **Sales Manager + Finance Controller sign-off**.
+   - *Mixed Category Deals*: Deal contains multiple line items with different categories $\implies$ **Highest applicable risk level among all lines applies**.
+4. **Validated Rule Editor (React Hook Form + Zod)**:
+   - Form inputs for all 5 discount limits, high-risk threshold points, authorized officer, and audit justification reason.
+   - Comprehensive validation: Bronze $\le$ Silver $\le$ Gold, $0\%\text{--}100\%$ bounds, minimum justification length.
+   - **Confirmation Modal**: High-impact dialog showing previous vs new values with impact disclosure before applying changes to the active governance engine.
+5. **Immutable Audit Ledger**:
+   - Professional data table displaying rule name, category, previous value, new value, changed by, timestamp, and audit reason with real-time text search.
+
+### P. Role-Based Navigation & Access Governance ([`src/components/layout/app-shell.tsx`](file:///E:/Tidnatum/src/components/layout/app-shell.tsx))
+1. **Unified Multi-Role Architecture (Zero App Duplication)**:
+   - Shared component architecture with dynamic role-aware navigation menus.
+   - Five distinct enterprise roles supported:
+     - **CUSTOMER**: Portal (`/portal`), Quotations (`/portal/quotations`), Invoices (`/portal/invoices`), Subscriptions (`/portal/profile#subscriptions`), Profile (`/portal/profile`).
+     - **SALES_EXECUTIVE**: Dashboard (`/`), Quotations (`/quotes`), Customers (`/customers`), Fulfillment (`/fulfillment`), Subscriptions (`/subscriptions`), Invoices (`/invoices`), Deal Health (`/deal-health`).
+     - **SALES_MANAGER**: Dashboard (`/`), Quotations (`/quotes`), Approvals (`/approvals`), Customers (`/customers`), Deal Health (`/deal-health`), Reports (`/reports`).
+     - **FINANCE_OFFICER**: Dashboard (`/`), Approvals (`/approvals`), Invoices (`/invoices`), Payments (`/invoices?tab=settlements`), Reports (`/reports`).
+     - **ADMIN**: Dashboard (`/`), Users/Stakeholders (`/customers`), Customers (`/customers`), Products (`/products`), Price Lists (`/price-lists`), Reports (`/reports`), Settings (`/settings/discount-rules`).
+2. **Interactive Quick Role Switcher**:
+   - Header role pill with color-coded theme badge (`ADMIN` indigo, `SALES MANAGER` amber, `SALES EXECUTIVE` teal, `FINANCE OFFICER` purple, `CUSTOMER` emerald).
+   - 1-click dropdown allows judges and evaluators to switch perspectives instantly without re-logging in.
+3. **Collapsible Desktop Sidebar & Mobile Drawer**:
+   - Desktop sidebar toggles smoothly between expanded (256px) and collapsed icon-only (72px) mode with persistent layout ergonomics.
+   - Full mobile responsive drawer with hamburger toggle and backdrop overlay.
+   - Rich hover tooltips explaining the commercial governance purpose of each route.
+4. **Active Route Indicators**:
+   - High-contrast visual markers (`bg-teal-50 text-teal-900 border-l-4 border-teal-600 shadow-enterprise`) highlighting active path.
+
 ---
 
 ## 5. Verification Status & Build Health
@@ -537,9 +578,9 @@ Run command:
 ```bash
 npm run build
 ```
-* **Turbopack Build**: Compiles cleanly in **~3.5s**
+* **Turbopack Build**: Compiles cleanly in **~2.4s**
 * **TypeScript Typecheck**: Passes with **0 errors** (checked via Next.js strict build)
-* **Static / Dynamic Routes Verified (27/27)**:
+* **Static / Dynamic Routes Verified (28/28)**:
   - `○ /` (Executive Sales Dashboard)
   - `○ /_not-found`
   - `○ /approvals` (Commercial Approval Center Ledger)
@@ -565,6 +606,7 @@ npm run build
   - `ƒ /quotes/[id]` (Sales Quotation Detail & Governance Dynamic route)
   - `○ /quotes/new` (Multi-line Quotation Creator)
   - `○ /reports` (Commercial Reports & Revenue Intelligence)
+  - `○ /settings/discount-rules` (Admin Configuration for Discount Rules & Audit Trail)
   - `○ /signup`
   - `○ /subscriptions` (Commercial Subscriptions Ledger & MRR Dashboard)
   - `ƒ /subscriptions/[id]` (Subscription Detail, Billing Schedule & Actions Dynamic route)

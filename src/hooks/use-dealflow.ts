@@ -9,6 +9,8 @@ import {
   SubscriptionStatus,
   Product,
   Customer,
+  DiscountPolicyConfig,
+  RuleAuditLogEntry,
 } from '@/types/dealflow';
 
 export const QUERY_KEYS = {
@@ -23,6 +25,8 @@ export const QUERY_KEYS = {
   FULFILLMENT: ['fulfillment'],
   SUBSCRIPTIONS: ['subscriptions'],
   SUBSCRIPTION: (id: string) => ['subscriptions', id],
+  DISCOUNT_RULES: ['discount-rules'],
+  DISCOUNT_AUDIT: ['discount-audit'],
 };
 
 export function useCustomers() {
@@ -270,6 +274,40 @@ export function useModifySubscription() {
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.SUBSCRIPTIONS });
       queryClient.setQueryData(QUERY_KEYS.SUBSCRIPTION(updated.id), updated);
+    },
+  });
+}
+
+export function useDiscountRules() {
+  return useQuery({
+    queryKey: QUERY_KEYS.DISCOUNT_RULES,
+    queryFn: () => dealflowApi.getDiscountRules(),
+  });
+}
+
+export function useDiscountAuditLogs() {
+  return useQuery({
+    queryKey: QUERY_KEYS.DISCOUNT_AUDIT,
+    queryFn: () => dealflowApi.getDiscountAuditLogs(),
+  });
+}
+
+export function useUpdateDiscountRules() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      config,
+      changedBy,
+      reason,
+    }: {
+      config: DiscountPolicyConfig;
+      changedBy?: string;
+      reason?: string;
+    }) => dealflowApi.updateDiscountRules(config, changedBy, reason),
+    onSuccess: (result) => {
+      queryClient.setQueryData(QUERY_KEYS.DISCOUNT_RULES, result.config);
+      queryClient.setQueryData(QUERY_KEYS.DISCOUNT_AUDIT, result.audits);
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUOTATIONS });
     },
   });
 }

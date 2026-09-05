@@ -7,6 +7,8 @@ import {
   WarehouseStock,
   WarehouseAllocation,
   CommercialSubscription,
+  DiscountPolicyConfig,
+  RuleAuditLogEntry,
 } from '@/types/dealflow';
 import { evaluateLineItem, evaluateQuotationRisk } from '@/lib/discount-engine';
 
@@ -1277,3 +1279,69 @@ export const SEED_SUBSCRIPTIONS: CommercialSubscription[] = [
     notes: 'CANCELLED: Account transitioned to internal maintenance team on Jan 1, 2026.',
   },
 ];
+
+export const SEED_DISCOUNT_RULES: DiscountPolicyConfig = {
+  tierLimits: {
+    Bronze: 5,
+    Silver: 10,
+    Gold: 15,
+  },
+  categoryLimits: {
+    Hardware: 15,
+    Services: 10,
+  },
+  workflowRules: {
+    withinLimit: 'No approval required (Straight-Through Processing)',
+    overLimit: 'Sales Manager sign-off required',
+    highRisk: 'Sales Manager + Finance Controller sign-off required',
+    mixedCategory: 'Highest applicable risk level among all line items',
+    highRiskThresholdPoints: 5,
+    criticalRiskThresholdPoints: 10,
+  },
+  updatedAt: '2026-08-15T14:30:00Z',
+  updatedBy: 'Sarah Sterling (Finance Controller)',
+};
+
+export const SEED_RULE_AUDIT_LOG: RuleAuditLogEntry[] = [
+  {
+    id: 'AUD-RUL-101',
+    rule: 'Services Discount Ceiling',
+    category: 'Category Limit',
+    previousValue: '12%',
+    newValue: '10%',
+    changedBy: 'Sarah Sterling (Finance Controller)',
+    timestamp: '2026-08-15 14:30:00',
+    reason: 'Gross margin preservation on professional onsite engineering deployments',
+  },
+  {
+    id: 'AUD-RUL-102',
+    rule: 'Gold Customer Tier Cap',
+    category: 'Customer Tier',
+    previousValue: '18%',
+    newValue: '15%',
+    changedBy: 'Marcus Vance (Sales Operations)',
+    timestamp: '2026-07-01 09:15:00',
+    reason: 'Harmonization with enterprise hardware gross margin guidelines',
+  },
+  {
+    id: 'AUD-RUL-103',
+    rule: 'Mixed Category Line Item Rule',
+    category: 'Workflow Rule',
+    previousValue: 'Average deal discount',
+    newValue: 'Highest applicable risk level',
+    changedBy: 'Audit & Commercial Risk Committee',
+    timestamp: '2026-06-10 11:00:00',
+    reason: 'Prevent service concession masking inside large hardware bundles',
+  },
+  {
+    id: 'AUD-RUL-104',
+    rule: 'Bronze Customer Tier Cap',
+    category: 'Customer Tier',
+    previousValue: '0%',
+    newValue: '5%',
+    changedBy: 'Elena Rostova (Account Executive)',
+    timestamp: '2026-05-18 16:45:00',
+    reason: 'Introductory incentive allowance for new account onboarding',
+  },
+];
+

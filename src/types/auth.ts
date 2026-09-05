@@ -1,6 +1,15 @@
 import { CustomerTier } from './dealflow';
 
-export type UserRole = 'DEAL_DESK' | 'SALES_EXEC' | 'FINANCE_CONTROLLER' | 'CUSTOMER';
+export type UserRole =
+  | 'CUSTOMER'
+  | 'ADMIN'
+  | 'SALES_MANAGER'
+  | 'SALES_EXECUTIVE'
+  | 'FINANCE_OFFICER'
+  // Backward-compatible aliases
+  | 'DEAL_DESK'
+  | 'SALES_EXEC'
+  | 'FINANCE_CONTROLLER';
 
 export type SubscriptionPlan = 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE' | 'NONE';
 

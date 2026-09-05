@@ -190,7 +190,7 @@ export default function LoginPage() {
                   onClick={() => handleQuickFill(acc)}
                   className="text-[11px] px-2 py-1 rounded bg-white border border-teal-200 text-teal-900 hover:bg-teal-100/60 font-medium transition cursor-pointer shadow-2xs"
                 >
-                  {acc.name} ({acc.role === 'DEAL_DESK' ? 'Sales Ops' : acc.role === 'FINANCE_CONTROLLER' ? 'Finance' : 'Client'})
+                  {acc.name} ({acc.roleLabel || acc.role.replace(/_/g, ' ')})
                 </button>
               ))}
             </div>

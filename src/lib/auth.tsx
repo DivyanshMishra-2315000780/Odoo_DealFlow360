@@ -6,39 +6,119 @@ import { CustomerTier } from '@/types/dealflow';
 
 const STORAGE_KEY = 'dealflow360_auth_user_v1';
 
-export const DEMO_ACCOUNTS: Array<AuthUser & { passwordHint: string }> = [
+export const DEMO_ACCOUNTS: Array<AuthUser & { passwordHint: string; roleLabel: string; title: string }> = [
   {
     id: 'USR-01',
-    name: 'Marcus Vance',
-    email: 'marcus@dealflow360.com',
-    company: 'DealFlow360 Internal',
-    role: 'DEAL_DESK',
+    name: 'Arthur Pendelton',
+    email: 'admin@dealflow360.com',
+    company: 'DealFlow360 Global',
+    role: 'ADMIN',
+    roleLabel: 'Admin',
+    title: 'System Administrator & Governance Lead',
     passwordHint: 'admin123',
   },
   {
     id: 'USR-02',
-    name: 'Sarah Sterling',
-    email: 'sarah.sterling@dealflow360.com',
-    company: 'DealFlow360 Finance',
-    role: 'FINANCE_CONTROLLER',
-    passwordHint: 'finance123',
+    name: 'Marcus Vance',
+    email: 'marcus@dealflow360.com',
+    company: 'DealFlow360 Deal Desk',
+    role: 'SALES_MANAGER',
+    roleLabel: 'Sales Manager',
+    title: 'Director of Commercial Sales & Deal Desk',
+    passwordHint: 'sales123',
   },
   {
     id: 'USR-03',
+    name: 'Elena Rostova',
+    email: 'elena@dealflow360.com',
+    company: 'DealFlow360 Commercial Sales',
+    role: 'SALES_EXECUTIVE',
+    roleLabel: 'Sales Executive',
+    title: 'Senior Enterprise Account Executive',
+    passwordHint: 'exec123',
+  },
+  {
+    id: 'USR-04',
+    name: 'Sarah Sterling',
+    email: 'sarah.sterling@dealflow360.com',
+    company: 'DealFlow360 Finance Ops',
+    role: 'FINANCE_OFFICER',
+    roleLabel: 'Finance Officer',
+    title: 'Finance Controller & Risk Sign-Off',
+    passwordHint: 'finance123',
+  },
+  {
+    id: 'USR-05',
     name: 'Sarah Jenkins',
     email: 's.jenkins@acmecorp.com',
     company: 'Acme Corporation',
     role: 'CUSTOMER',
+    roleLabel: 'Customer (Client)',
+    title: 'VP of Global Procurement (Gold Tier)',
     tier: 'Gold',
     subscriptionPlan: 'ENTERPRISE',
     passwordHint: 'acme123',
   },
 ];
 
+export function normalizeRole(
+  role?: string
+): 'CUSTOMER' | 'ADMIN' | 'SALES_MANAGER' | 'SALES_EXECUTIVE' | 'FINANCE_OFFICER' {
+  if (!role) return 'SALES_EXECUTIVE';
+  if (role === 'ADMIN') return 'ADMIN';
+  if (role === 'CUSTOMER') return 'CUSTOMER';
+  if (role === 'SALES_MANAGER' || role === 'DEAL_DESK') return 'SALES_MANAGER';
+  if (role === 'FINANCE_OFFICER' || role === 'FINANCE_CONTROLLER') return 'FINANCE_OFFICER';
+  if (role === 'SALES_EXECUTIVE' || role === 'SALES_EXEC') return 'SALES_EXECUTIVE';
+  return 'SALES_EXECUTIVE';
+}
+
+export function getRoleMeta(role?: string) {
+  const norm = normalizeRole(role);
+  switch (norm) {
+    case 'ADMIN':
+      return {
+        label: 'Admin',
+        badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+        dotColor: 'bg-indigo-500',
+        description: 'Full administrative access: users, products, price lists, and policy settings',
+      };
+    case 'SALES_MANAGER':
+      return {
+        label: 'Sales Manager',
+        badgeClass: 'bg-amber-50 text-amber-800 border-amber-300',
+        dotColor: 'bg-amber-500',
+        description: 'Deal Desk manager: deal approvals, quotations oversight, reports, and risk velocity',
+      };
+    case 'SALES_EXECUTIVE':
+      return {
+        label: 'Sales Executive',
+        badgeClass: 'bg-teal-50 text-teal-700 border-teal-200',
+        dotColor: 'bg-teal-500',
+        description: 'Field AE: quotation creation, pipeline management, client accounts, fulfillment',
+      };
+    case 'FINANCE_OFFICER':
+      return {
+        label: 'Finance Officer',
+        badgeClass: 'bg-purple-50 text-purple-700 border-purple-200',
+        dotColor: 'bg-purple-500',
+        description: 'Financial governance: critical risk approvals, invoices, payments, cashflow',
+      };
+    case 'CUSTOMER':
+      return {
+        label: 'Customer (Client)',
+        badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+        dotColor: 'bg-emerald-500',
+        description: 'Procurement portal: quote reviews, negotiations, online invoice settlements',
+      };
+  }
+}
+
 interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
   login: (email: string, password: string, overrideUser?: Partial<AuthUser>) => Promise<AuthUser>;
+  switchRole: (role: UserRole) => void;
   signup: (data: {
     fullName: string;
     email: string;
@@ -98,6 +178,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return authenticatedUser;
   };
 
+  const switchRole = (role: UserRole) => {
+    const norm = normalizeRole(role);
+    const matched = DEMO_ACCOUNTS.find((a) => a.role === norm) || DEMO_ACCOUNTS[1];
+    setUser(matched);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(matched));
+  };
+
   const signup = async (data: {
     fullName: string;
     email: string;
@@ -129,7 +216,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, switchRole, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );

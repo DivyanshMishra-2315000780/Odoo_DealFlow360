@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   Building,
   ShieldCheck,
+  RefreshCcw,
 } from 'lucide-react';
 import { TierBadge } from '@/components/ui/tier-badge';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     { label: 'Overview', href: '/portal', icon: LayoutDashboard },
     { label: 'My Quotations', href: '/portal/quotations', icon: FileText },
     { label: 'Invoices', href: '/portal/invoices', icon: CreditCard },
+    { label: 'Subscriptions', href: '/portal/profile#subscriptions', icon: RefreshCcw },
     { label: 'Profile', href: '/portal/profile', icon: User },
   ];
 

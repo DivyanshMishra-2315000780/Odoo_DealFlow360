@@ -11,6 +11,8 @@ import {
   WarehouseAllocation,
   CommercialSubscription,
   SubscriptionStatus,
+  DiscountPolicyConfig,
+  RuleAuditLogEntry,
 } from '@/types/dealflow';
 import {
   SEED_CUSTOMERS,
@@ -20,6 +22,8 @@ import {
   SEED_FULFILLMENT,
   SEED_WAREHOUSE_STOCK,
   SEED_SUBSCRIPTIONS,
+  SEED_DISCOUNT_RULES,
+  SEED_RULE_AUDIT_LOG,
 } from './seed-data';
 
 const STORAGE_KEYS = {
@@ -30,6 +34,8 @@ const STORAGE_KEYS = {
   FULFILLMENT: 'dealflow360_fulfillment_v1',
   WAREHOUSE_STOCK: 'dealflow360_warehouse_stock_v1',
   SUBSCRIPTIONS: 'dealflow360_subscriptions_v1',
+  DISCOUNT_RULES: 'dealflow360_discount_rules_v1',
+  DISCOUNT_AUDIT: 'dealflow360_discount_audit_v1',
 };
 
 // In-memory fallback if running on server side
@@ -40,6 +46,8 @@ let memoryInvoices: Invoice[] = [...SEED_INVOICES];
 let memoryFulfillment: FulfillmentOrder[] = [...SEED_FULFILLMENT];
 let memoryWarehouseStock: WarehouseStock[] = [...SEED_WAREHOUSE_STOCK];
 let memorySubscriptions: CommercialSubscription[] = [...SEED_SUBSCRIPTIONS];
+let memoryDiscountRules: DiscountPolicyConfig = { ...SEED_DISCOUNT_RULES };
+let memoryRuleAuditLog: RuleAuditLogEntry[] = [...SEED_RULE_AUDIT_LOG];
 
 function isBrowser(): boolean {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
@@ -380,6 +388,109 @@ export const mockStore = {
     return sub;
   },
 
+  getDiscountRules(): DiscountPolicyConfig {
+    return loadFromStorage<DiscountPolicyConfig>(STORAGE_KEYS.DISCOUNT_RULES, memoryDiscountRules);
+  },
+
+  getDiscountAuditLogs(): RuleAuditLogEntry[] {
+    return loadFromStorage<RuleAuditLogEntry[]>(STORAGE_KEYS.DISCOUNT_AUDIT, memoryRuleAuditLog);
+  },
+
+  updateDiscountRules(
+    newConfig: DiscountPolicyConfig,
+    changedBy = 'Marcus Vance (Sales Operations)',
+    reason = 'Administrative policy revision'
+  ): { config: DiscountPolicyConfig; audits: RuleAuditLogEntry[] } {
+    const current = this.getDiscountRules();
+    const currentAudits = this.getDiscountAuditLogs();
+    const newAudits: RuleAuditLogEntry[] = [];
+    const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+
+    // Compare Bronze
+    if (current.tierLimits.Bronze !== newConfig.tierLimits.Bronze) {
+      newAudits.push({
+        id: `AUD-RUL-${Date.now()}-1`,
+        rule: 'Bronze Customer Tier Cap',
+        category: 'Customer Tier',
+        previousValue: `${current.tierLimits.Bronze}%`,
+        newValue: `${newConfig.tierLimits.Bronze}%`,
+        changedBy,
+        timestamp: now,
+        reason,
+      });
+    }
+    // Compare Silver
+    if (current.tierLimits.Silver !== newConfig.tierLimits.Silver) {
+      newAudits.push({
+        id: `AUD-RUL-${Date.now()}-2`,
+        rule: 'Silver Customer Tier Cap',
+        category: 'Customer Tier',
+        previousValue: `${current.tierLimits.Silver}%`,
+        newValue: `${newConfig.tierLimits.Silver}%`,
+        changedBy,
+        timestamp: now,
+        reason,
+      });
+    }
+    // Compare Gold
+    if (current.tierLimits.Gold !== newConfig.tierLimits.Gold) {
+      newAudits.push({
+        id: `AUD-RUL-${Date.now()}-3`,
+        rule: 'Gold Customer Tier Cap',
+        category: 'Customer Tier',
+        previousValue: `${current.tierLimits.Gold}%`,
+        newValue: `${newConfig.tierLimits.Gold}%`,
+        changedBy,
+        timestamp: now,
+        reason,
+      });
+    }
+    // Compare Hardware
+    if (current.categoryLimits.Hardware !== newConfig.categoryLimits.Hardware) {
+      newAudits.push({
+        id: `AUD-RUL-${Date.now()}-4`,
+        rule: 'Hardware Discount Ceiling',
+        category: 'Category Limit',
+        previousValue: `${current.categoryLimits.Hardware}%`,
+        newValue: `${newConfig.categoryLimits.Hardware}%`,
+        changedBy,
+        timestamp: now,
+        reason,
+      });
+    }
+    // Compare Services
+    if (current.categoryLimits.Services !== newConfig.categoryLimits.Services) {
+      newAudits.push({
+        id: `AUD-RUL-${Date.now()}-5`,
+        rule: 'Services Discount Ceiling',
+        category: 'Category Limit',
+        previousValue: `${current.categoryLimits.Services}%`,
+        newValue: `${newConfig.categoryLimits.Services}%`,
+        changedBy,
+        timestamp: now,
+        reason,
+      });
+    }
+
+    const updatedConfig: DiscountPolicyConfig = {
+      ...newConfig,
+      updatedAt: now,
+      updatedBy: changedBy,
+    };
+
+    const updatedAudits = [...newAudits, ...currentAudits];
+
+    if (isBrowser()) {
+      saveToStorage(STORAGE_KEYS.DISCOUNT_RULES, updatedConfig);
+      saveToStorage(STORAGE_KEYS.DISCOUNT_AUDIT, updatedAudits);
+    } else {
+      memoryDiscountRules = updatedConfig;
+      memoryRuleAuditLog = updatedAudits;
+    }
+
+    return { config: updatedConfig, audits: updatedAudits };
+  },
+
   resetToDefaults(): void {
     if (isBrowser()) {
       window.localStorage.removeItem(STORAGE_KEYS.QUOTATIONS);
@@ -389,6 +500,8 @@ export const mockStore = {
       window.localStorage.removeItem(STORAGE_KEYS.FULFILLMENT);
       window.localStorage.removeItem(STORAGE_KEYS.WAREHOUSE_STOCK);
       window.localStorage.removeItem(STORAGE_KEYS.SUBSCRIPTIONS);
+      window.localStorage.removeItem(STORAGE_KEYS.DISCOUNT_RULES);
+      window.localStorage.removeItem(STORAGE_KEYS.DISCOUNT_AUDIT);
     }
     memoryQuotations = [...SEED_QUOTATIONS];
     memoryCustomers = [...SEED_CUSTOMERS];
@@ -397,5 +510,7 @@ export const mockStore = {
     memoryFulfillment = [...SEED_FULFILLMENT];
     memoryWarehouseStock = [...SEED_WAREHOUSE_STOCK];
     memorySubscriptions = [...SEED_SUBSCRIPTIONS];
+    memoryDiscountRules = { ...SEED_DISCOUNT_RULES };
+    memoryRuleAuditLog = [...SEED_RULE_AUDIT_LOG];
   },
 };

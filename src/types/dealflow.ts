@@ -13,6 +13,39 @@ export const CATEGORY_DISCOUNT_LIMITS: Record<ProductCategory, number> = {
   Services: 10,
 };
 
+export interface DiscountPolicyConfig {
+  tierLimits: {
+    Bronze: number;
+    Silver: number;
+    Gold: number;
+  };
+  categoryLimits: {
+    Hardware: number;
+    Services: number;
+  };
+  workflowRules: {
+    withinLimit: string;
+    overLimit: string;
+    highRisk: string;
+    mixedCategory: string;
+    highRiskThresholdPoints: number;
+    criticalRiskThresholdPoints: number;
+  };
+  updatedAt: string;
+  updatedBy: string;
+}
+
+export interface RuleAuditLogEntry {
+  id: string;
+  rule: string;
+  category: 'Customer Tier' | 'Category Limit' | 'Workflow Rule';
+  previousValue: string;
+  newValue: string;
+  changedBy: string;
+  timestamp: string;
+  reason?: string;
+}
+
 export interface ProductVariant {
   id: string;
   name: string;

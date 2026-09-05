@@ -9,6 +9,8 @@ import {
   WarehouseStock,
   CommercialSubscription,
   SubscriptionStatus,
+  DiscountPolicyConfig,
+  RuleAuditLogEntry,
 } from '@/types/dealflow';
 import { mockStore } from '@/mock/store';
 
@@ -172,6 +174,24 @@ export const dealflowApi = {
   async modifySubscription(sub: CommercialSubscription): Promise<CommercialSubscription> {
     const updated = mockStore.modifySubscription(sub);
     return simulateDelay(updated, 200);
+  },
+
+  // Discount Rules & Governance Engine
+  async getDiscountRules(): Promise<DiscountPolicyConfig> {
+    return simulateDelay(mockStore.getDiscountRules());
+  },
+
+  async getDiscountAuditLogs(): Promise<RuleAuditLogEntry[]> {
+    return simulateDelay(mockStore.getDiscountAuditLogs());
+  },
+
+  async updateDiscountRules(
+    config: DiscountPolicyConfig,
+    changedBy?: string,
+    reason?: string
+  ): Promise<{ config: DiscountPolicyConfig; audits: RuleAuditLogEntry[] }> {
+    const result = mockStore.updateDiscountRules(config, changedBy, reason);
+    return simulateDelay(result, 200);
   },
 
   // System Utility
