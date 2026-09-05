@@ -39,6 +39,7 @@ import { Dialog, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { CardLoadingSkeleton } from '@/components/ui/loading-state';
 import { ErrorState } from '@/components/ui/error-state';
+import { QuoteRevisionPanel } from '@/components/quotations/revision-panel';
 import { QuotationStatus } from '@/types/dealflow';
 
 export default function QuotationDetailPage() {
@@ -63,8 +64,12 @@ export default function QuotationDetailPage() {
     { key: 'DRAFT', label: '1. Draft' },
     { key: 'PENDING', label: '2. Approval' },
     { key: 'APPROVED', label: '3. Approved' },
-    { key: 'NEGOTIATION', label: '4. Negotiation' },
-    { key: 'CONFIRMED', label: '5. Confirmed' },
+    { key: 'SENT', label: '4. Sent' },
+    { key: 'NEGOTIATION', label: '5. Negotiation' },
+    { key: 'CONFIRMED', label: '6. Confirmed' },
+    { key: 'FULFILLMENT', label: '7. Fulfillment' },
+    { key: 'BILLING', label: '8. Billing' },
+    { key: 'COMPLETED', label: '9. Completed' },
   ];
 
   const currentStepIndex = useMemo(() => {
@@ -73,17 +78,22 @@ export default function QuotationDetailPage() {
       case 'DRAFT':
         return 0;
       case 'PENDING_APPROVAL':
-      case 'PENDING_FINANCE_APPROVAL':
-      case 'PENDING_DISCOUNT_APPROVAL':
         return 1;
       case 'APPROVED':
         return 2;
-      case 'IN_NEGOTIATION':
+      case 'SENT':
         return 3;
-      case 'CONFIRMED':
-      case 'FULFILLED':
+      case 'UNDER_NEGOTIATION':
         return 4;
-      case 'RETURNED':
+      case 'CONFIRMED':
+        return 5;
+      case 'FULFILLMENT':
+        return 6;
+      case 'BILLING':
+        return 7;
+      case 'COMPLETED':
+        return 8;
+      case 'REVISION_REQUIRED':
         return 1; // back at approval stage / revision
       case 'REJECTED':
         return 1; // stopped at approval stage
@@ -144,14 +154,11 @@ export default function QuotationDetailPage() {
   }
 
   // Permission Checks based on current status
-  const isPendingApproval =
-    quotation.status === 'PENDING_APPROVAL' ||
-    quotation.status === 'PENDING_FINANCE_APPROVAL' ||
-    quotation.status === 'PENDING_DISCOUNT_APPROVAL';
-  const isDraft = quotation.status === 'DRAFT';
-  const isReturned = quotation.status === 'RETURNED';
-  const isApproved = quotation.status === 'APPROVED';
-  const isNegotiation = quotation.status === 'IN_NEGOTIATION';
+  const isPendingApproval = quotation.status === 'PENDING_APPROVAL' && quotation.approvalRole === user?.role;
+  const isDraft = quotation.status === 'DRAFT' && user?.role === 'SALES_EXECUTIVE';
+  const isReturned = ['REVISION_REQUIRED','REJECTED'].includes(quotation.status) && user?.role === 'SALES_EXECUTIVE';
+  const isApproved = quotation.status === 'APPROVED' && user?.role === 'SALES_EXECUTIVE';
+  const isNegotiation = quotation.status === 'UNDER_NEGOTIATION';
   const isConfirmed = quotation.status === 'CONFIRMED';
   const isRejected = quotation.status === 'REJECTED';
 
@@ -753,7 +760,7 @@ export default function QuotationDetailPage() {
                   size="sm"
                   onClick={() =>
                     handleExecuteTransition(
-                      'RETURNED',
+                      'REVISION_REQUIRED',
                       'Returned to AE for margin concession restructuring.'
                     )
                   }
@@ -769,11 +776,11 @@ export default function QuotationDetailPage() {
                   size="sm"
                   onClick={() => {
                     const nextStatus = quotation.riskDiagnosis.requiresFinanceApproval
-                      ? 'PENDING_FINANCE_APPROVAL'
+                      ? 'PENDING_APPROVAL'
                       : 'APPROVED';
                     handleExecuteTransition(
                       nextStatus,
-                      nextStatus === 'PENDING_FINANCE_APPROVAL'
+                      nextStatus === 'PENDING_APPROVAL'
                         ? 'Submitted for Finance approval due to policy exception.'
                         : 'Submitted and cleared automatically.'
                     );
@@ -790,7 +797,7 @@ export default function QuotationDetailPage() {
                   size="sm"
                   onClick={() =>
                     handleExecuteTransition(
-                      'IN_NEGOTIATION',
+                      'UNDER_NEGOTIATION',
                       'Quotation dispatched to procurement client.'
                     )
                   }

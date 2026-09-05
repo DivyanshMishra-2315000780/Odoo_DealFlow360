@@ -34,6 +34,7 @@ import { ErrorState } from '@/components/ui/error-state';
 import { useInvoice, useRecordInvoicePayment } from '@/hooks/use-dealflow';
 import { useToast } from '@/components/providers/query-provider';
 import { formatCurrency } from '@/lib/utils';
+import { useAuth } from '@/lib/auth';
 import { InvoiceLifecycleStage, ChargeType } from '@/types/dealflow';
 
 interface InvoiceDetailPageProps {
@@ -46,6 +47,7 @@ export default function InvoiceDetailPage({ params }: InvoiceDetailPageProps) {
 
   const { data: invoice, isLoading, error } = useInvoice(invoiceId);
   const recordPayment = useRecordInvoicePayment();
+  const {user}=useAuth();
   const { toast } = useToast();
 
   // Payment Dialog State

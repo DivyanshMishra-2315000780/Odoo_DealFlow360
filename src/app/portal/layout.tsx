@@ -3,6 +3,8 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useToast } from '@/components/providers/query-provider';
+import { useRouter } from 'next/navigation';
 import {
   FileText,
   CreditCard,
@@ -21,7 +23,9 @@ import { useAuth } from '@/lib/auth';
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const { toast } = useToast();
+  const router = useRouter();
 
   const customerName = user?.company || 'Acme Corporation';
   const customerTier = user?.tier || 'Gold';
@@ -34,6 +38,23 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     { label: 'Subscriptions', href: '/portal/profile#subscriptions', icon: RefreshCcw },
     { label: 'Profile', href: '/portal/profile', icon: User },
   ];
+
+  const handleLogout = async () => {
+    try {
+      logout();
+      toast({
+        title: 'Logout SuccessFull',
+        type: 'success',
+      });
+      router.push('/login');
+    } catch {
+      toast({
+        title: 'Authentication Failed',
+        description: 'Invalid credentials. Please verify your email and password.',
+        type: 'error',
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 selection:bg-teal-100 selection:text-teal-900">
@@ -87,6 +108,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                   <span className="sm:hidden">Exit</span>
                 </Button>
               </Link>
+              <Button onClick={handleLogout}>Logout</Button>
             </div>
           </div>
         </div>

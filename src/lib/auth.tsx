@@ -1,11 +1,16 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { AuthUser, UserRole, SubscriptionPlan } from '@/types/auth';
+import { useQueryClient } from '@tanstack/react-query';
 import { CustomerTier } from '@/types/dealflow';
 
 const STORAGE_KEY = 'dealflow360_auth_user_v1';
 
+// ──────────────────────────────────────────────────────────────────────
+// Demo Accounts — used for quick-fill login buttons
+// Passwords match what the seed script inserts (bcrypt hashed in DB)
+// ──────────────────────────────────────────────────────────────────────
 export const DEMO_ACCOUNTS: Array<AuthUser & { passwordHint: string; roleLabel: string; title: string }> = [
   {
     id: 'USR-01',
@@ -114,6 +119,121 @@ export function getRoleMeta(role?: string) {
   }
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Backend Auth API Calls
+// ──────────────────────────────────────────────────────────────────────
+
+interface BackendAuthUser {
+  userId: string;
+  customerId: string | null;
+  email: string;
+  role: string;
+  firstName: string;
+  lastName: string;
+  sessionId: string;
+}
+
+interface BackendAuthResult {
+  user: BackendAuthUser;
+  accessToken: string;
+  expiresIn: number;
+}
+
+/** Transform backend AuthenticatedUser to frontend AuthUser */
+function backendToFrontendUser(backend: BackendAuthUser): AuthUser {
+  // Find a matching demo account for enriched data (company, tier, etc.)
+  const demo = DEMO_ACCOUNTS.find(
+    (a) => a.email.toLowerCase() === backend.email.toLowerCase()
+  );
+
+  return {
+    id: backend.userId,
+    customerId: backend.customerId ?? undefined,
+    name: demo?.name ?? `${backend.firstName} ${backend.lastName}`,
+    email: backend.email,
+    company: demo?.company ?? 'Enterprise Partner',
+    role: normalizeRole(backend.role),
+    tier: demo?.tier as CustomerTier | undefined,
+    subscriptionPlan: demo?.subscriptionPlan as SubscriptionPlan | undefined,
+  };
+}
+
+async function enrichCustomer(user:AuthUser):Promise<AuthUser>{
+  if(user.role!=='CUSTOMER')return user;
+  const response=await fetch('/api/customer/profile',{credentials:'include'});
+  if(!response.ok)return user;
+  const body=await response.json();const customer=(body.data??body).customer;
+  return {...user,company:customer?.name??user.company,tier:customer?.tier?customer.tier.charAt(0)+customer.tier.slice(1).toLowerCase():user.tier};
+}
+async function apiLogin(email: string, password: string): Promise<AuthUser> {
+  const res = await fetch('/api/auth/login', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ message: 'Login failed' }));
+    throw new Error(error.error ?? error.message ?? 'Invalid credentials');
+  }
+
+  const data: BackendAuthResult = await res.json();
+  return enrichCustomer(backendToFrontendUser(data.user));
+}
+
+async function apiSignup(data: {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  companyName?: string;
+}): Promise<AuthUser> {
+  const res = await fetch('/api/auth/signup', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ message: 'Signup failed' }));
+    throw new Error(error.error ?? error.message ?? 'Signup failed');
+  }
+
+  const result: BackendAuthResult = await res.json();
+  return enrichCustomer(backendToFrontendUser(result.user));
+}
+
+async function apiGetMe(): Promise<AuthUser | null> {
+  try {
+    const res = await fetch('/api/auth/me', {
+      credentials: 'include',
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.user) return null;
+    return backendToFrontendUser(data.user);
+  } catch {
+    return null;
+  }
+}
+
+async function apiLogout(): Promise<void> {
+  try {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } catch {
+    // Always clear local state even if API call fails
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Auth Context & Provider
+// ──────────────────────────────────────────────────────────────────────
+
 interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
@@ -135,104 +255,44 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
+  const queryClient = useQueryClient();
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setUser(JSON.parse(stored));
-      } else {
-        // Default to Marcus Vance for frictionless demo inspection
-        setUser(DEMO_ACCOUNTS[0]);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(DEMO_ACCOUNTS[0]));
-      }
-    } catch {
-      setUser(DEMO_ACCOUNTS[0]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const login = async (
-    email: string,
-    password: string,
-    overrideUser?: Partial<AuthUser>
-  ): Promise<AuthUser> => {
-    // Simulate slight network delay
-    await new Promise((res) => setTimeout(res, 250));
-
-    // Match with demo account if exists, otherwise construct valid session
-    const matched = DEMO_ACCOUNTS.find((a) => a.email.toLowerCase() === email.toLowerCase());
-    const authenticatedUser: AuthUser = {
-      id: matched?.id || `USR-${Math.floor(1000 + Math.random() * 9000)}`,
-      name: overrideUser?.name || matched?.name || email.split('@')[0],
-      email,
-      company: overrideUser?.company || matched?.company || 'Enterprise Partner',
-      role: overrideUser?.role || matched?.role || 'DEAL_DESK',
-      tier: overrideUser?.tier || matched?.tier || 'Silver',
-      subscriptionPlan: overrideUser?.subscriptionPlan || matched?.subscriptionPlan || 'PROFESSIONAL',
-    };
-
-    setUser(authenticatedUser);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(authenticatedUser));
-    return authenticatedUser;
-  };
-
-  const switchRole = (role: UserRole) => {
-    const norm = normalizeRole(role);
-    const matched = DEMO_ACCOUNTS.find((a) => a.role === norm) || DEMO_ACCOUNTS[1];
-    setUser(matched);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(matched));
-  };
-
-  const signup = async (data: {
-    fullName: string;
-    email: string;
-    password: string;
-    company: string;
-    tier?: CustomerTier;
-    subscriptionPlan?: SubscriptionPlan;
-  }): Promise<AuthUser> => {
-    await new Promise((res) => setTimeout(res, 300));
-
-    // Customer tier is system-assigned based on enterprise qualification or defaults to Bronze
-    const assignedTier: CustomerTier = data.tier
-      ? data.tier
-      : data.company.toLowerCase().includes('acme')
-      ? 'Gold'
-      : 'Bronze';
-
-    const newUser: AuthUser = {
-      id: `USR-${Math.floor(2000 + Math.random() * 8000)}`,
-      name: data.fullName,
-      email: data.email,
-      company: data.company,
-      role: 'CUSTOMER',
-      tier: assignedTier,
-      subscriptionPlan: data.subscriptionPlan || 'NONE',
-    };
-
-    setUser(newUser);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
-    return newUser;
-  };
-
-  const logout = () => {
-    setUser(null);
+    let active = true;
     localStorage.removeItem(STORAGE_KEY);
-  };
-
-  return (
-    <AuthContext.Provider value={{ user, isLoading, login, switchRole, signup, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+    apiGetMe().then(value => { if (active) { setUser(value); setIsLoading(false); } });
+    return () => { active = false; };
+  }, []);
+  const login = useCallback(async (email: string, password: string): Promise<AuthUser> => {
+    const authenticated = await apiLogin(email, password);
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    setUser(authenticated);
+    return authenticated;
+  }, [queryClient]);
+  const signup = useCallback(async (data: { fullName: string; email: string; password: string; company: string }): Promise<AuthUser> => {
+    const [firstName, ...rest] = data.fullName.trim().split(/\s+/);
+    const authenticated = await apiSignup({firstName, lastName: rest.join(' ') || firstName, email: data.email, password: data.password, companyName: data.company});
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    setUser(authenticated);
+    return authenticated;
+  }, [queryClient]);
+  const logout = useCallback(() => {
+    setIsLoading(true);
+    apiLogout().finally(async () => {
+      await queryClient.cancelQueries();
+      queryClient.clear();
+      setUser(null);
+      setIsLoading(false);
+      window.location.assign('/login');
+    });
+  }, [queryClient]);
+  // A role is determined by the authenticated account. Choose another account by logging in.
+  const switchRole = useCallback(() => { logout(); }, [logout]);
+  return <AuthContext.Provider value={{ user, isLoading, login, switchRole, signup, logout }}>{children}</AuthContext.Provider>;
 }
-
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 }

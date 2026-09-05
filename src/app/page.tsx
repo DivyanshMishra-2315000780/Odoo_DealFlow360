@@ -98,7 +98,7 @@ export default function SalesDashboardPage() {
 
   // KPI Calculations
   const pendingApprovals = filteredQuotations.filter(
-    (q) => q.status === 'PENDING_FINANCE_APPROVAL' || q.status === 'PENDING_DISCOUNT_APPROVAL'
+    (q) => q.status === 'PENDING_APPROVAL'
   );
   const openQuotations = filteredQuotations.filter((q) => q.status !== 'REJECTED');
   const atRiskDeals = filteredQuotations.filter(
@@ -126,11 +126,11 @@ export default function SalesDashboardPage() {
       items: filteredQuotations.filter((q) => q.status === 'DRAFT'),
     },
     {
-      key: 'PENDING_FINANCE_APPROVAL',
+      key: 'PENDING_APPROVAL',
       label: 'Pending Approval',
       description: 'Discount review required',
       items: filteredQuotations.filter(
-        (q) => q.status === 'PENDING_FINANCE_APPROVAL' || q.status === 'PENDING_DISCOUNT_APPROVAL'
+        (q) => q.status === 'PENDING_APPROVAL'
       ),
     },
     {
@@ -143,19 +143,19 @@ export default function SalesDashboardPage() {
       key: 'NEGOTIATION',
       label: 'Negotiation',
       description: 'Active client counter-offers',
-      items: filteredQuotations.filter((q) => q.status === 'IN_NEGOTIATION'),
+      items: filteredQuotations.filter((q) => q.status === 'UNDER_NEGOTIATION'),
     },
     {
       key: 'CONFIRMED',
       label: 'Confirmed',
       description: 'Binding agreement secured',
-      items: filteredQuotations.filter((q) => q.status === 'CONFIRMED' || q.status === 'FULFILLED'),
+      items: filteredQuotations.filter((q) => q.status === 'CONFIRMED' || q.status === 'FULFILLMENT'),
     },
   ];
 
   // Deal Health Groupings
   const stalledDeals = filteredQuotations.filter(
-    (q) => q.status === 'IN_NEGOTIATION' || q.status === 'DRAFT'
+    (q) => q.status === 'UNDER_NEGOTIATION' || q.status === 'DRAFT'
   );
   const discountAnomalies = filteredQuotations.filter((q) =>
     q.items.some((item) => item.isViolation)
@@ -422,7 +422,7 @@ export default function SalesDashboardPage() {
           <button
             type="button"
             onClick={() => {
-              const pending = quotations.find((q) => q.status === 'PENDING_FINANCE_APPROVAL') || quotations[0];
+              const pending = quotations.find((q) => q.status === 'PENDING_APPROVAL') || quotations[0];
               setInspectQuotation(pending);
             }}
             className="text-left p-4 rounded-lg border border-amber-200 bg-amber-50/70 hover:bg-amber-100/70 transition shadow-enterprise group cursor-pointer"
@@ -990,9 +990,7 @@ export default function SalesDashboardPage() {
             >
               Close
             </Button>
-            {(inspectQuotation.status === 'PENDING_APPROVAL' ||
-              inspectQuotation.status === 'PENDING_FINANCE_APPROVAL' ||
-              inspectQuotation.status === 'PENDING_DISCOUNT_APPROVAL') && (
+            {inspectQuotation.status === 'PENDING_APPROVAL' && (
               <>
                 <Button
                   variant="destructive"

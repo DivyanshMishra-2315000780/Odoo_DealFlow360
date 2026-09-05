@@ -527,7 +527,7 @@ export const SEED_QUOTATIONS: Quotation[] = [
       { product: SEED_PRODUCTS[0], quantity: 20, discountPercent: 15 }, // HW: allowed 15%
       { product: SEED_PRODUCTS[4], quantity: 2, discountPercent: 10 },  // Care Plan: Services allowed 10%
     ],
-    'IN_NEGOTIATION',
+    'UNDER_NEGOTIATION',
     '2026-09-04T11:20:00Z',
     [
       {
@@ -572,7 +572,7 @@ export const SEED_QUOTATIONS: Quotation[] = [
       { product: SEED_PRODUCTS[0], quantity: 6, discountPercent: 18 }, // HW: allowed 15% -> +3% excess
       { product: SEED_PRODUCTS[1], quantity: 6, discountPercent: 12 }, // HW: allowed 15% -> compliant
     ],
-    'RETURNED',
+    'REVISION_REQUIRED',
     '2026-09-03T16:00:00Z',
     [
       {
@@ -635,7 +635,7 @@ export const SEED_QUOTATIONS: Quotation[] = [
       { product: SEED_PRODUCTS[0], quantity: 10, discountPercent: 12 }, // HW: allowed 15% -> compliant
       { product: SEED_PRODUCTS[1], quantity: 10, discountPercent: 10 }, // HW: allowed 15% -> compliant
     ],
-    'IN_NEGOTIATION',
+    'UNDER_NEGOTIATION',
     '2026-08-27T09:00:00Z',
     [
       {
@@ -675,7 +675,7 @@ export const SEED_QUOTATIONS: Quotation[] = [
       { product: SEED_PRODUCTS[0], quantity: 14, discountPercent: 22 }, // HW limit 10% (Silver) -> VIOLATION: +12% over limit! Typical discount 8% -> +14% variance!
       { product: SEED_PRODUCTS[2], quantity: 4, discountPercent: 18 },  // Services limit 10% -> VIOLATION: +8% over limit!
     ],
-    'PENDING_FINANCE_APPROVAL',
+    'PENDING_APPROVAL',
     '2026-09-04T16:00:00Z',
     [
       {
@@ -723,8 +723,8 @@ export const SEED_INVOICES: Invoice[] = [
     remainingAmount: 3650.24,
     issueDate: '2026-09-02',
     dueDate: '2026-10-02',
-    status: 'UNPAID',
-    paymentStatus: 'UNPAID',
+    status: 'ISSUED',
+    paymentStatus: 'ISSUED',
     lifecycleStage: 'ORDER_CONFIRMED',
     isShipped: false,
     shipmentStatus: 'NOT_SHIPPED',
@@ -773,8 +773,8 @@ export const SEED_INVOICES: Invoice[] = [
     remainingAmount: 24850,
     issueDate: '2026-08-29',
     dueDate: '2026-09-28',
-    status: 'UNPAID',
-    paymentStatus: 'UNPAID',
+    status: 'ISSUED',
+    paymentStatus: 'ISSUED',
     lifecycleStage: 'INVOICED',
     isShipped: true,
     shipmentStatus: 'SHIPPED',
@@ -867,8 +867,8 @@ export const SEED_INVOICES: Invoice[] = [
     remainingAmount: 41200,
     issueDate: '2026-09-04',
     dueDate: '2026-10-04',
-    status: 'UNPAID',
-    paymentStatus: 'UNPAID',
+    status: 'ISSUED',
+    paymentStatus: 'ISSUED',
     lifecycleStage: 'ORDER_CONFIRMED',
     isShipped: false,
     shipmentStatus: 'NOT_SHIPPED',
@@ -919,7 +919,7 @@ export const SEED_INVOICES: Invoice[] = [
     issueDate: '2026-07-15',
     dueDate: '2026-08-14',
     status: 'OVERDUE',
-    paymentStatus: 'UNPAID',
+    paymentStatus: 'ISSUED',
     lifecycleStage: 'INVOICED',
     isShipped: true,
     shipmentStatus: 'SHIPPED',
@@ -1197,7 +1197,7 @@ export const SEED_SUBSCRIPTIONS: CommercialSubscription[] = [
       'Automated Telemetry & Health Monitoring Alerts',
     ],
     invoiceHistory: [
-      { id: 'INV-1039', date: '2026-08-29', amount: 4550, status: 'UNPAID', period: 'Jul 1 - Sep 30, 2026' },
+      { id: 'INV-1039', date: '2026-08-29', amount: 4550, status: 'ISSUED', period: 'Jul 1 - Sep 30, 2026' },
       { id: 'INV-1025', date: '2026-04-01', amount: 4550, status: 'PAID', period: 'Apr 1 - Jun 30, 2026' },
       { id: 'INV-1011', date: '2026-01-01', amount: 4550, status: 'PAID', period: 'Jan 1 - Mar 31, 2026' },
     ],

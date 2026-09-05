@@ -52,9 +52,6 @@ export default function QuotesPage() {
 
   // Status mapping helper for filter comparisons
   const normalizeStatus = (status: QuotationStatus): string => {
-    if (status === 'PENDING_APPROVAL' || status === 'PENDING_FINANCE_APPROVAL' || status === 'PENDING_DISCOUNT_APPROVAL') {
-      return 'PENDING_APPROVAL';
-    }
     return status;
   };
 
@@ -142,7 +139,7 @@ export default function QuotesPage() {
     const totalCount = quotations.length;
     const actionRequired = quotations.filter((q) => {
       const norm = normalizeStatus(q.status);
-      return norm === 'PENDING_APPROVAL' || norm === 'RETURNED';
+      return norm === 'PENDING_APPROVAL' || norm === 'REVISION_REQUIRED';
     }).length;
     const pipelineValue = quotations.reduce((acc, q) => acc + q.grandTotal, 0);
     const avgHealth = totalCount > 0
@@ -280,9 +277,9 @@ export default function QuotesPage() {
                 <option value="DRAFT">Draft</option>
                 <option value="PENDING_APPROVAL">Pending Approval</option>
                 <option value="APPROVED">Approved</option>
-                <option value="IN_NEGOTIATION">Negotiation</option>
+                <option value="UNDER_NEGOTIATION">Negotiation</option>
                 <option value="CONFIRMED">Confirmed</option>
-                <option value="RETURNED">Returned</option>
+                <option value="REVISION_REQUIRED">Returned</option>
                 <option value="REJECTED">Rejected</option>
               </Select>
             </div>

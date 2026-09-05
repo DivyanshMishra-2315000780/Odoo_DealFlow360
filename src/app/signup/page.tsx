@@ -19,7 +19,6 @@ import {
   Award,
   CheckCircle2,
   ArrowRight,
-  ShieldAlert,
   Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -33,10 +32,18 @@ import { useToast } from '@/components/providers/query-provider';
 const signupSchema = z
   .object({
     fullName: z.string().min(2, 'Full Name must be at least 2 characters'),
-    email: z.string().email('Please enter a valid business email address'),
+    email: z.email('Please enter a valid business email address'),
     company: z.string().min(2, 'Company name is required'),
-    password: z.string().min(6, 'Password must be at least 6 characters'),
-    confirmPassword: z.string().min(6, 'Please confirm your password'),
+    password: z.string().min(10).max(128)
+        .regex(/[a-z]/, 'Password must contain a lowercase letter')
+        .regex(/[A-Z]/, 'Password must contain an uppercase letter')
+        .regex(/[0-9]/, 'Password must contain a number')
+        .regex(/[^A-Za-z0-9]/, 'Password must contain a special character'),
+    confirmPassword: z.string().min(10).max(128)
+        .regex(/[a-z]/, 'Password must contain a lowercase letter')
+        .regex(/[A-Z]/, 'Password must contain an uppercase letter')
+        .regex(/[0-9]/, 'Password must contain a number')
+        .regex(/[^A-Za-z0-9]/, 'Password must contain a special character'),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: 'Passwords do not match',
@@ -140,13 +147,12 @@ export default function SignupPage() {
 
   const onSubmit = async (values: SignupFormValues) => {
     try {
-      const isAcme = values.company.toLowerCase().includes('acme');
       const user = await signup({
         fullName: values.fullName,
         email: values.email,
         company: values.company,
         password: values.password,
-        tier: isAcme ? 'Gold' : 'Bronze',
+        tier:'Bronze',
         subscriptionPlan: selectedPlan,
       });
 

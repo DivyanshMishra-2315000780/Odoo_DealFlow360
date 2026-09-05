@@ -19,6 +19,10 @@ import {
   RequirementStatus,
 } from '@/types/dealflow';
 
+// ──────────────────────────────────────────────────────────────────────
+// Query Keys — centralized for cache management
+// ──────────────────────────────────────────────────────────────────────
+
 export const QUERY_KEYS = {
   CUSTOMERS: ['customers'],
   CUSTOMER: (id: string) => ['customers', id],
@@ -29,13 +33,25 @@ export const QUERY_KEYS = {
   INVOICES: ['invoices'],
   INVOICE: (id: string) => ['invoices', id],
   FULFILLMENT: ['fulfillment'],
+  FULFILLMENT_ORDER: (id: string) => ['fulfillment', id],
+  WAREHOUSE_STOCK: ['warehouseStock'],
   SUBSCRIPTIONS: ['subscriptions'],
   SUBSCRIPTION: (id: string) => ['subscriptions', id],
   DISCOUNT_RULES: ['discount-rules'],
   DISCOUNT_AUDIT: ['discount-audit'],
   REQUIREMENTS: ['requirements'],
   REQUIREMENT: (id: string) => ['requirements', id],
+  DASHBOARD: ['dashboard'],
+  DEAL_HEALTH: ['deal-health'],
+  DEAL_HEALTH_QUOTE: (id: string) => ['deal-health', id],
+  APPROVALS: ['approvals'],
+  APPROVAL: (id: string) => ['approvals', id],
+  NOTIFICATIONS: ['notifications'],
 };
+
+// ──────────────────────────────────────────────────────────────────────
+// Customer Queries
+// ──────────────────────────────────────────────────────────────────────
 
 export function useCustomers() {
   return useQuery({
@@ -51,6 +67,10 @@ export function useCustomer(id: string) {
     enabled: Boolean(id),
   });
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// Product Queries & Mutations
+// ──────────────────────────────────────────────────────────────────────
 
 export function useProducts() {
   return useQuery({
@@ -90,6 +110,10 @@ export function useDeleteProduct() {
   });
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Quotation Queries & Mutations
+// ──────────────────────────────────────────────────────────────────────
+
 export function useQuotations() {
   return useQuery({
     queryKey: QUERY_KEYS.QUOTATIONS,
@@ -102,75 +126,6 @@ export function useQuotation(id: string) {
     queryKey: QUERY_KEYS.QUOTATION(id),
     queryFn: () => dealflowApi.getQuotationById(id),
     enabled: Boolean(id),
-  });
-}
-
-export function useInvoices() {
-  return useQuery({
-    queryKey: QUERY_KEYS.INVOICES,
-    queryFn: () => dealflowApi.getInvoices(),
-  });
-}
-
-export function useInvoice(id: string) {
-  return useQuery({
-    queryKey: QUERY_KEYS.INVOICE(id),
-    queryFn: () => dealflowApi.getInvoiceById(id),
-    enabled: Boolean(id),
-  });
-}
-
-export function useFulfillmentOrders() {
-  return useQuery({
-    queryKey: QUERY_KEYS.FULFILLMENT,
-    queryFn: () => dealflowApi.getFulfillmentOrders(),
-  });
-}
-
-export function useFulfillmentOrder(id: string) {
-  return useQuery({
-    queryKey: ['fulfillment', id],
-    queryFn: () => dealflowApi.getFulfillmentOrderById(id),
-    enabled: Boolean(id),
-  });
-}
-
-export function useWarehouseStock() {
-  return useQuery({
-    queryKey: ['warehouseStock'],
-    queryFn: () => dealflowApi.getWarehouseStock(),
-  });
-}
-
-export function useUpdateFulfillmentOrder() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (order: FulfillmentOrder) => dealflowApi.updateFulfillmentOrder(order),
-    onSuccess: (updated) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.FULFILLMENT });
-      queryClient.setQueryData(['fulfillment', updated.id], updated);
-    },
-  });
-}
-
-export function useCreateShipment() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      id,
-      carrier,
-      trackingNumber,
-    }: {
-      id: string;
-      carrier: string;
-      trackingNumber: string;
-    }) => dealflowApi.createShipment(id, carrier, trackingNumber),
-    onSuccess: (updated) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.FULFILLMENT });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INVOICES });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUOTATIONS });
-      queryClient.setQueryData(['fulfillment', updated.id], updated);
-    },
   });
 }
 
@@ -202,6 +157,8 @@ export function useUpdateQuotationStatus() {
     onSuccess: (updatedQuotation) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUOTATIONS });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INVOICES });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.FULFILLMENT });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.APPROVALS });
       queryClient.setQueryData(QUERY_KEYS.QUOTATION(updatedQuotation.id), updatedQuotation);
     },
   });
@@ -217,6 +174,25 @@ export function useSaveQuotation() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.REQUIREMENTS });
       queryClient.setQueryData(QUERY_KEYS.QUOTATION(saved.id), saved);
     },
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Invoice Queries & Mutations
+// ──────────────────────────────────────────────────────────────────────
+
+export function useInvoices() {
+  return useQuery({
+    queryKey: QUERY_KEYS.INVOICES,
+    queryFn: () => dealflowApi.getInvoices(),
+  });
+}
+
+export function useInvoice(id: string) {
+  return useQuery({
+    queryKey: QUERY_KEYS.INVOICE(id),
+    queryFn: () => dealflowApi.getInvoiceById(id),
+    enabled: Boolean(id),
   });
 }
 
@@ -259,10 +235,73 @@ export function useRecordInvoicePayment() {
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INVOICES });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUOTATIONS });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DEAL_HEALTH });
       queryClient.setQueryData(QUERY_KEYS.INVOICE(updated.id), updated);
     },
   });
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// Fulfillment & Warehouse Queries
+// ──────────────────────────────────────────────────────────────────────
+
+export function useFulfillmentOrders() {
+  return useQuery({
+    queryKey: QUERY_KEYS.FULFILLMENT,
+    queryFn: () => dealflowApi.getFulfillmentOrders(),
+  });
+}
+
+export function useFulfillmentOrder(id: string) {
+  return useQuery({
+    queryKey: QUERY_KEYS.FULFILLMENT_ORDER(id),
+    queryFn: () => dealflowApi.getFulfillmentOrderById(id),
+    enabled: Boolean(id),
+  });
+}
+
+export function useWarehouseStock() {
+  return useQuery({
+    queryKey: QUERY_KEYS.WAREHOUSE_STOCK,
+    queryFn: () => dealflowApi.getWarehouseStock(),
+  });
+}
+
+export function useUpdateFulfillmentOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (order: FulfillmentOrder) => dealflowApi.updateFulfillmentOrder(order),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.FULFILLMENT });
+      queryClient.setQueryData(QUERY_KEYS.FULFILLMENT_ORDER(updated.id), updated);
+    },
+  });
+}
+
+export function useCreateShipment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      carrier,
+      trackingNumber,
+    }: {
+      id: string;
+      carrier: string;
+      trackingNumber: string;
+    }) => dealflowApi.createShipment(id, carrier, trackingNumber),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.FULFILLMENT });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INVOICES });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUOTATIONS });
+      queryClient.setQueryData(QUERY_KEYS.FULFILLMENT_ORDER(updated.id), updated);
+    },
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Subscription Queries & Mutations
+// ──────────────────────────────────────────────────────────────────────
 
 export function useSubscriptions() {
   return useQuery({
@@ -302,6 +341,10 @@ export function useModifySubscription() {
   });
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Discount Rules Queries & Mutations
+// ──────────────────────────────────────────────────────────────────────
+
 export function useDiscountRules() {
   return useQuery({
     queryKey: QUERY_KEYS.DISCOUNT_RULES,
@@ -335,6 +378,10 @@ export function useUpdateDiscountRules() {
     },
   });
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// Customer Requirements Queries & Mutations
+// ──────────────────────────────────────────────────────────────────────
 
 export function useRequirements(customerId?: string) {
   return useQuery({
@@ -390,6 +437,10 @@ export function useUpdateRequirementStatus() {
     },
   });
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// System Utility
+// ──────────────────────────────────────────────────────────────────────
 
 export function useResetDemoData() {
   const queryClient = useQueryClient();

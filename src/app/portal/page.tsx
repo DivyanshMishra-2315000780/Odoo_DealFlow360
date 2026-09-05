@@ -33,18 +33,18 @@ export default function CustomerPortalOverview() {
 
   // Filter deals for this customer (or Acme Corporation by default)
   const myQuotations = quotations.filter((q) =>
-    q.customerName.toLowerCase().includes('acme') || q.customerName === customerName
+    q.customerId === user?.customerId
   );
 
   const pendingActionDeals = myQuotations.filter(
-    (q) => q.status === 'PENDING_FINANCE_APPROVAL' || q.status === 'IN_NEGOTIATION'
+    (q) => q.status === 'SENT'
   );
 
   const myInvoices = invoices.filter((inv) =>
-    inv.customerName.toLowerCase().includes('acme') || inv.customerName === customerName
+    inv.customerId === user?.customerId
   );
 
-  const outstandingInvoices = myInvoices.filter((i) => i.status === 'UNPAID');
+  const outstandingInvoices = myInvoices.filter((i) => i.status === 'ISSUED');
 
   return (
     <div className="space-y-8 pb-12">
@@ -53,13 +53,13 @@ export default function CustomerPortalOverview() {
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
-              Procurement Center
+              
             </span>
             <span className="text-slate-300">•</span>
-            <span className="text-xs text-slate-500 font-medium">Acme Corporation Commercial Desk</span>
+            <span className="text-xs text-slate-500 font-medium">{user?.company}</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight mt-1.5">
-            Welcome, Sarah Jenkins
+            Welcome, {user?.name}
           </h1>
           <p className="text-xs text-slate-500 mt-1 max-w-xl leading-relaxed">
             Review active hardware and service quotations, negotiate pricing within your Gold Tier limits, and track enterprise shipments.

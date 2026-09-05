@@ -75,9 +75,9 @@ export default function ApprovalDecisionPage() {
   const timelineStages = useMemo(() => {
     if (!quotation) return [];
 
-    const isReturned = quotation.status === 'RETURNED';
+    const isReturned = quotation.status === 'REVISION_REQUIRED';
     const isApproved = quotation.status === 'APPROVED';
-    const isConfirmed = quotation.status === 'CONFIRMED' || quotation.status === 'FULFILLED';
+    const isConfirmed = quotation.status === 'CONFIRMED' || quotation.status === 'FULFILLMENT';
     const isRejected = quotation.status === 'REJECTED';
 
     const smDone = Boolean(quotation.salesManagerApproved);
@@ -107,7 +107,7 @@ export default function ApprovalDecisionPage() {
         status: isRejected
           ? ('REJECTED' as const)
           : isReturned
-          ? ('RETURNED' as const)
+          ? ('REVISION_REQUIRED' as const)
           : smDone
           ? ('COMPLETED' as const)
           : smCurrent
@@ -125,7 +125,7 @@ export default function ApprovalDecisionPage() {
         status: isRejected
           ? ('REJECTED' as const)
           : isReturned
-          ? ('RETURNED' as const)
+          ? ('REVISION_REQUIRED' as const)
           : finDone
           ? ('COMPLETED' as const)
           : finCurrent
@@ -148,11 +148,11 @@ export default function ApprovalDecisionPage() {
     ];
   }, [quotation]);
 
-  const handleAction = async (decision: 'APPROVED' | 'RETURNED' | 'REJECTED') => {
+  const handleAction = async (decision: 'APPROVED' | 'REVISION_REQUIRED' | 'REJECTED') => {
     if (!quotation) return;
 
     // Reason validation for return / reject
-    if ((decision === 'RETURNED' || decision === 'REJECTED') && !dialogReason.trim()) {
+    if ((decision === 'REVISION_REQUIRED' || decision === 'REJECTED') && !dialogReason.trim()) {
       setReasonError('An explicit commercial justification is required for audit governance.');
       return;
     }
@@ -171,7 +171,7 @@ export default function ApprovalDecisionPage() {
       if (isStep1ManagerApproval) {
         await updateStatusMutation.mutateAsync({
           id: quotation.id,
-          status: 'PENDING_FINANCE_APPROVAL',
+          status: 'PENDING_APPROVAL',
           note: dialogReason.trim() || 'Sales Manager approved deal terms and tier concessions. Escalated to Finance Controller for final sign-off.',
           actor: user?.name ? `${user.name} (Sales Manager)` : 'Marcus Vance (Sales Manager)',
           meta: {
@@ -202,11 +202,11 @@ export default function ApprovalDecisionPage() {
           title:
             decision === 'APPROVED'
               ? 'Quotation Approved'
-              : decision === 'RETURNED'
+              : decision === 'REVISION_REQUIRED'
               ? 'Returned for Revision'
               : 'Quotation Rejected',
           description: `Quotation ${quotation.id} has been transitioned to ${decision.replace(/_/g, ' ')}.`,
-          type: decision === 'APPROVED' ? 'success' : decision === 'RETURNED' ? 'warning' : 'error',
+          type: decision === 'APPROVED' ? 'success' : decision === 'REVISION_REQUIRED' ? 'warning' : 'error',
         });
       }
 
@@ -243,10 +243,7 @@ export default function ApprovalDecisionPage() {
     );
   }
 
-  const isPending =
-    quotation.status === 'PENDING_APPROVAL' ||
-    quotation.status === 'PENDING_FINANCE_APPROVAL' ||
-    quotation.status === 'PENDING_DISCOUNT_APPROVAL';
+  const isPending = quotation.status === 'PENDING_APPROVAL';
 
   return (
     <div className="space-y-6">
@@ -484,7 +481,7 @@ export default function ApprovalDecisionPage() {
             const isCompleted = stage.status === 'COMPLETED';
             const isCurrent = stage.status === 'CURRENT';
             const isRejected = stage.status === 'REJECTED';
-            const isReturned = stage.status === 'RETURNED';
+            const isReturned = stage.status === 'REVISION_REQUIRED';
 
             return (
               <div
@@ -793,7 +790,7 @@ export default function ApprovalDecisionPage() {
               {activeDialog === 'RETURN' && (
                 <Button
                   size="sm"
-                  onClick={() => handleAction('RETURNED')}
+                  onClick={() => handleAction('REVISION_REQUIRED')}
                   loading={isProcessing}
                   className="bg-amber-600 hover:bg-amber-700 text-white font-semibold"
                 >

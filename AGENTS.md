@@ -749,3 +749,13 @@ npm run build
   - **Fulfillment Backorder Consolidation** ([`src/app/fulfillment/[id]/page.tsx`](file:///e:/Tidnatum/src/app/fulfillment/[id]/page.tsx)): Added a working "Consolidate Remaining Backorder" button in the backorder callout to allocate secondary depot buffer and clear deficit.
   - **Role-Based Navigation Alignment** ([`src/components/layout/app-shell.tsx`](file:///e:/Tidnatum/src/components/layout/app-shell.tsx)): Fixed navigation menus across all 5 roles (Customer, Sales Executive, Sales Manager, Finance Officer, Admin) and removed duplicate customer links.
   - **Clean Production Build**: Zero TypeScript errors (`npx tsc --noEmit`) and successful Next.js 16.3.4 production build across all 23 routes (`npm run build`).
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

@@ -23,6 +23,9 @@ import { Input } from '@/components/ui/input';
 import { TierBadge } from '@/components/ui/tier-badge';
 import { TableLoadingSkeleton } from '@/components/ui/loading-state';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useMutation } from '@tanstack/react-query';
+import { request } from '@/lib/http/client';
+import { useAuth } from '@/lib/auth';
 import { useSubscriptions } from '@/hooks/use-dealflow';
 import { formatCurrency } from '@/lib/utils';
 import { SubscriptionStatus, BillingFrequency } from '@/types/dealflow';
@@ -69,6 +72,8 @@ function BillingFrequencyBadge({ freq }: { freq: BillingFrequency }) {
 }
 
 export default function SubscriptionsListPage() {
+  const {user}=useAuth();
+  const billing=useMutation({mutationFn:()=>request('/api/subscriptions/bill-due',{method:'POST'})});
   const { data: subscriptions = [], isLoading } = useSubscriptions();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<'ALL' | SubscriptionStatus>('ALL');
@@ -108,6 +113,8 @@ export default function SubscriptionsListPage() {
 
   return (
     <div className="space-y-6 pb-12">
+      {['ADMIN','FINANCE_OFFICER'].includes(user?.role??'')&&<Button disabled={billing.isPending} onClick={()=>billing.mutate()}>Issue due renewal invoices</Button>}
+      {billing.error&&<p role="alert">{billing.error.message}</p>}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-5">
         <div>

@@ -1,3 +1,8 @@
+/**
+ * DealFlow360 API Service Layer
+ * Clean abstraction: All TanStack Query hooks call these methods.
+ * Now connected to real Next.js API routes backed by Neon PostgreSQL.
+ */
 import {
   Customer,
   CustomerTier,
@@ -18,108 +23,140 @@ import {
   RequirementPriority,
   RequirementStatus,
 } from '@/types/dealflow';
-import { mockStore } from '@/mock/store';
+import {
+  adaptCustomer,
+  adaptCustomers,
+  adaptProduct,
+  adaptProducts,
+  adaptQuotation,
+  adaptQuotations,
+  adaptInvoice,
+  adaptInvoices,
+  adaptFulfillmentOrder,
+  adaptFulfillmentOrders,
+  adaptWarehouseStocks,
+  adaptSubscription,
+  adaptSubscriptions,
+  adaptRequirement,
+  adaptRequirements,
+  adaptDiscountRules,
+  adaptRuleAuditLogs,
+} from './api-adapter';
 
-// Simulates slight network latency for authentic enterprise UX (spinners, optimistic updates)
-const NETWORK_DELAY_MS = 150;
+// ──────────────────────────────────────────────────────────────────────
+// HTTP Client Utility
+// ──────────────────────────────────────────────────────────────────────
 
-function simulateDelay<T>(data: T, ms = NETWORK_DELAY_MS): Promise<T> {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(data), ms);
-  });
-}
-
-/**
- * DealFlow360 API Service Layer
- * Clean abstraction: All TanStack Query hooks call these methods.
- * When backend is connected, replace simulateDelay / mockStore with axios calls.
- */
+import { request as apiFetch } from '@/lib/http/client';
 export const dealflowApi = {
-  // Customers
-  async getCustomers(): Promise<Customer[]> {
-    return simulateDelay(mockStore.getCustomers());
-  },
+  // ─── Customers ───────────────────────────────────────────────────
+  async getCustomers(): Promise<Customer[]> { return adaptCustomers(await apiFetch('/api/customers')); },
 
-  async getCustomerById(id: string): Promise<Customer | null> {
-    const customer = mockStore.getCustomerById(id);
-    return simulateDelay(customer || null);
-  },
+  async getCustomerById(id: string): Promise<Customer | null> { return (await this.getCustomers()).find(c => c.id === id) ?? null; },
 
-  // Products
-  async getProducts(): Promise<Product[]> {
-    return simulateDelay(mockStore.getProducts());
-  },
+  // ─── Products ────────────────────────────────────────────────────
+  async getProducts(): Promise<Product[]> { return adaptProducts(await apiFetch('/api/catalog')); },
 
-  async getProductById(id: string): Promise<Product | null> {
-    const product = mockStore.getProductById(id);
-    return simulateDelay(product || null);
-  },
+  async getProductById(id: string): Promise<Product | null> { return (await this.getProducts()).find(p => p.id === id) ?? null; },
 
   async saveProduct(product: Product): Promise<Product> {
-    return simulateDelay(mockStore.saveProduct(product));
+    return (async () => {
+        // Determine if this is a create or update
+        const method = product.id ? 'PATCH' : 'POST';
+        const url = product.id
+          ? `/api/admin/products/${product.id}`
+          : '/api/admin/products';
+        return adaptProduct(
+          await apiFetch(url, {
+            method,
+            body: JSON.stringify({
+              sku: product.sku,
+              name: product.name,
+              description: product.description,
+              baseCost: String(product.basePrice),
+              isRecurring: product.isSubscription ?? false,
+            }),
+          })
+        );
+      })();
   },
 
   async deleteProduct(id: string): Promise<boolean> {
-    return simulateDelay(mockStore.deleteProduct(id));
+    return (async () => {
+        await apiFetch(`/api/admin/products/${id}`, { method: 'DELETE' });
+        return true;
+      })();
   },
 
-  // Quotations
+  // ─── Quotations ──────────────────────────────────────────────────
   async getQuotations(): Promise<Quotation[]> {
-    return simulateDelay(mockStore.getQuotations());
+    return (async () => adaptQuotations(await apiFetch('/api/quotes')))();
   },
 
   async getQuotationById(id: string): Promise<Quotation | null> {
-    const quotation = mockStore.getQuotationById(id);
-    return simulateDelay(quotation || null);
+    return (async () => {
+        try {
+          return adaptQuotation(await apiFetch(`/api/quotes/${id}`));
+        } catch (e) {
+          throw e;
+        }
+      })();
   },
 
   async saveQuotation(quotation: Quotation): Promise<Quotation> {
-    return simulateDelay(mockStore.saveQuotation(quotation), 200);
-  },
+  if (quotation.requirementId) {
+    const requirement = await this.getRequirementById(quotation.requirementId);
+    if (requirement?.status === 'NEW') await this.updateRequirementStatus(quotation.requirementId, 'IN_REVIEW');
+  }
+  const body = { customerId: quotation.customerId, quoteRequestId: quotation.requirementId, title: quotation.title, paymentTerms: quotation.notes,
+    lines: quotation.items.map(item => ({productId: item.productId, quantity: item.quantity, discountPercentage: item.discountPercent})) };
+  const saved = adaptQuotation(await apiFetch('/api/quotes', {method:'POST',body:JSON.stringify(body)}));
+  if (quotation.status !== 'DRAFT') return this.updateQuotationStatus(saved.id, 'PENDING_APPROVAL');
+  return saved;
+},
 
-  async updateQuotationStatus(
-    id: string,
-    status: QuotationStatus,
-    note?: string,
-    actor?: string,
-    meta?: {
-      salesManagerApproved?: boolean;
-      financeApproved?: boolean;
-      reapprovalRequired?: boolean;
-      reapprovalReason?: string;
-      deliveryDate?: string;
-      dealHealthScore?: number;
-      items?: QuotationLineItem[];
-    }
-  ): Promise<Quotation> {
-    const updated = mockStore.updateQuotationStatus(id, status, note, actor, meta);
-    if (!updated) {
-      throw new Error(`Quotation ${id} not found`);
-    }
-    return simulateDelay(updated, 200);
-  },
+  async updateQuotationStatus(id: string, status: QuotationStatus, note?: string, _actor?: string, meta?: {salesManagerApproved?: boolean; financeApproved?: boolean; reapprovalRequired?: boolean; reapprovalReason?: string; deliveryDate?: string; dealHealthScore?: number; items?: QuotationLineItem[]}): Promise<Quotation> {
+  const current = await this.getQuotationById(id);
+  if (!current) throw new Error('Quotation not found');
+  if (['APPROVED', 'REJECTED', 'REVISION_REQUIRED'].includes(status) && current.status === 'PENDING_APPROVAL') {
+    const approvals = await apiFetch<Array<{step:{id:string};request:{quotationId:string}}>>('/api/approvals');
+    const approval = approvals.find(a => a.request.quotationId === id);
+    if (!approval) throw new Error('No pending approval is assigned to your role. Earlier approval steps must finish first.');
+    const action = status === 'APPROVED' ? 'approve' : status === 'REJECTED' ? 'reject' : 'revision';
+    await apiFetch('/api/approvals/'+approval.step.id+'/'+action, {method:'POST', body:JSON.stringify({comment:note})});
+  } else if (status === 'UNDER_NEGOTIATION') {
+    const changes = (meta?.items ?? []).flatMap(item => {
+      const prior = current.items.find(line => line.id === item.id);
+      if (!prior) return [];
+      return ([['discountPercentage', item.discountPercent, prior.discountPercent], ['quantity',item.quantity,prior.quantity]] as const)
+        .filter(([,value,old])=>value!==old).map(([fieldChanged, requestedValue])=>({quotationLineId:item.id,fieldChanged,requestedValue}));
+    });
+    if (!changes.length) throw new Error('Change a line quantity or discount before submitting your counter-offer.');
+    await apiFetch('/api/quotes/'+id+'/negotiate',{method:'POST',body:JSON.stringify({requestType:'COUNTER_OFFER',customerNotes:note??'Counter offer',changes})});
+  } else {
+    const action = {PENDING_APPROVAL:'submit',SENT:'send',CONFIRMED:'confirm'}[status as 'PENDING_APPROVAL'|'SENT'|'CONFIRMED'];
+    if (!action) throw new Error('Use the appropriate workflow action to change this quotation.');
+    await apiFetch('/api/quotes/'+id+'/'+action,{method:'POST'});
+  }
+  return adaptQuotation(await apiFetch('/api/quotes/'+id));
+},
 
-  // Invoices
+  // ─── Invoices ────────────────────────────────────────────────────
   async getInvoices(): Promise<Invoice[]> {
-    return simulateDelay(mockStore.getInvoices());
+    return (async () => adaptInvoices(await apiFetch('/api/invoices')))();
   },
 
   async getInvoiceById(id: string): Promise<Invoice | null> {
-    const invoice = mockStore.getInvoiceById(id);
-    return simulateDelay(invoice || null);
+    return (async () => {
+        try {
+          return adaptInvoice(await apiFetch(`/api/invoices/${id}`));
+        } catch (e) {
+          throw e;
+        }
+      })();
   },
 
-  async updateInvoiceStatus(
-    id: string,
-    status: InvoiceStatus,
-    paymentMethod?: string
-  ): Promise<Invoice> {
-    const updated = mockStore.updateInvoiceStatus(id, status, paymentMethod);
-    if (!updated) {
-      throw new Error(`Invoice ${id} not found`);
-    }
-    return simulateDelay(updated, 200);
-  },
+  async updateInvoiceStatus(_id:string,_status:InvoiceStatus,_paymentMethod?:string):Promise<Invoice> {throw new Error('Record a verified payment with an amount and reference to settle this invoice.');},
 
   async recordInvoicePayment(
     id: string,
@@ -127,128 +164,113 @@ export const dealflowApi = {
     paymentMethod: string,
     paymentReference: string
   ): Promise<Invoice> {
-    const updated = mockStore.recordInvoicePayment(id, amount, paymentMethod, paymentReference);
-    if (!updated) {
-      throw new Error(`Invoice ${id} not found`);
-    }
-    return simulateDelay(updated, 200);
+    return (async () => {
+        await apiFetch('/api/payments', {
+          method: 'POST',
+          body: JSON.stringify({
+            invoiceId: id,
+            amount,
+            method: paymentMethod,
+            reference: paymentReference,
+          }),
+        });
+        return adaptInvoice(await apiFetch(`/api/invoices/${id}`));
+      })();
   },
 
-  // Fulfillment & Warehouse Logistics
+  // ─── Fulfillment & Warehouse Logistics ───────────────────────────
   async getFulfillmentOrders(): Promise<FulfillmentOrder[]> {
-    return simulateDelay(mockStore.getFulfillmentOrders());
+    return (async () => adaptFulfillmentOrders(await apiFetch('/api/fulfillment')))();
   },
 
   async getFulfillmentOrderById(id: string): Promise<FulfillmentOrder | null> {
-    const order = mockStore.getFulfillmentOrderById(id);
-    return simulateDelay(order || null);
+    return (async () => {
+        try {
+          return adaptFulfillmentOrder(await apiFetch(`/api/fulfillment/${id}`));
+        } catch (e) {
+          throw e;
+        }
+      })();
   },
 
-  async getWarehouseStock(): Promise<WarehouseStock[]> {
-    return simulateDelay(mockStore.getWarehouseStock());
-  },
+  async getWarehouseStock():Promise<WarehouseStock[]> { return adaptWarehouseStocks(await apiFetch('/api/warehouse-stock')); },
 
-  async updateFulfillmentOrder(order: FulfillmentOrder): Promise<FulfillmentOrder> {
-    const updated = mockStore.updateFulfillmentOrder(order);
-    return simulateDelay(updated, 200);
-  },
+  async updateFulfillmentOrder(order:FulfillmentOrder):Promise<FulfillmentOrder> {
+  if(order.status==='DELIVERED') await apiFetch('/api/fulfillment/'+order.id,{method:'PATCH',body:JSON.stringify({status:'DELIVERED'})});
+  else {
+    const recommendation=await apiFetch<{allocations:Array<{productId:string;warehouseId:string;allocatedQty:number}>}>('/api/fulfillment/'+order.id+'/recommend');
+    await apiFetch('/api/fulfillment/'+order.id+'/confirm',{method:'POST',body:JSON.stringify({allocations:recommendation.allocations.map(({productId,warehouseId,allocatedQty})=>({productId,warehouseId,allocatedQty}))})});
+  }
+  return adaptFulfillmentOrder(await apiFetch('/api/fulfillment/'+order.id));
+},
 
-  async createShipment(
-    id: string,
-    carrier: string,
-    trackingNumber: string
-  ): Promise<FulfillmentOrder> {
-    const updated = mockStore.createShipment(id, carrier, trackingNumber);
-    if (!updated) {
-      throw new Error(`Fulfillment order ${id} not found`);
-    }
-    return simulateDelay(updated, 200);
-  },
+  async createShipment(id:string,_carrier:string,_trackingNumber:string):Promise<FulfillmentOrder> {
+  await apiFetch('/api/fulfillment/'+id,{method:'PATCH',body:JSON.stringify({status:'SHIPPED'})});
+  return adaptFulfillmentOrder(await apiFetch('/api/fulfillment/'+id));
+},
 
-  // Subscriptions & Recurring Revenue
+  // ─── Subscriptions & Recurring Revenue ───────────────────────────
   async getSubscriptions(): Promise<CommercialSubscription[]> {
-    return simulateDelay(mockStore.getSubscriptions());
+    return (async () => adaptSubscriptions(await apiFetch('/api/subscriptions')))();
   },
 
   async getSubscriptionById(id: string): Promise<CommercialSubscription | null> {
-    const sub = mockStore.getSubscriptionById(id);
-    return simulateDelay(sub || null);
+    return (async () => {
+        try {
+          return adaptSubscription(await apiFetch(`/api/subscriptions/${id}`));
+        } catch (e) {
+          throw e;
+        }
+      })();
   },
 
-  async updateSubscriptionStatus(
-    id: string,
-    status: SubscriptionStatus
-  ): Promise<CommercialSubscription> {
-    const updated = mockStore.updateSubscriptionStatus(id, status);
-    if (!updated) {
-      throw new Error(`Subscription ${id} not found`);
-    }
-    return simulateDelay(updated, 200);
-  },
+  async updateSubscriptionStatus(id:string,status:SubscriptionStatus):Promise<CommercialSubscription> {return adaptSubscription(await apiFetch('/api/subscriptions/'+id,{method:'PATCH',body:JSON.stringify({status:status==='CANCELLED'?'CANCELED':status})}));},
 
-  async modifySubscription(sub: CommercialSubscription): Promise<CommercialSubscription> {
-    const updated = mockStore.modifySubscription(sub);
-    return simulateDelay(updated, 200);
-  },
+  async modifySubscription(sub:CommercialSubscription):Promise<CommercialSubscription> {return adaptSubscription(await apiFetch('/api/subscriptions/'+sub.id,{method:'PATCH',body:JSON.stringify({newQuantity:sub.seatsOrLicenses})}));},
 
-  // Discount Rules & Governance Engine
-  async getDiscountRules(): Promise<DiscountPolicyConfig> {
-    return simulateDelay(mockStore.getDiscountRules());
-  },
+  // ─── Discount Rules & Governance Engine ──────────────────────────
+  async getDiscountRules():Promise<DiscountPolicyConfig> {return adaptDiscountRules(await apiFetch('/api/policies'));},
 
-  async getDiscountAuditLogs(): Promise<RuleAuditLogEntry[]> {
-    return simulateDelay(mockStore.getDiscountAuditLogs());
-  },
+  async getDiscountAuditLogs():Promise<RuleAuditLogEntry[]> {return adaptRuleAuditLogs(await apiFetch('/api/policies/audit'));},
 
-  async updateDiscountRules(
-    config: DiscountPolicyConfig,
-    changedBy?: string,
-    reason?: string
-  ): Promise<{ config: DiscountPolicyConfig; audits: RuleAuditLogEntry[] }> {
-    const result = mockStore.updateDiscountRules(config, changedBy, reason);
-    return simulateDelay(result, 200);
-  },
+  async updateDiscountRules(config:DiscountPolicyConfig,_changedBy?:string,reason?:string):Promise<{config:DiscountPolicyConfig;audits:RuleAuditLogEntry[]}> {
+ await apiFetch('/api/policies',{method:'PUT',body:JSON.stringify({tierLimits:config.tierLimits,categoryLimits:config.categoryLimits,reason})});
+ return {config:await this.getDiscountRules(),audits:await this.getDiscountAuditLogs()};
+},
 
-  // Customer Requirements
+  // ─── Customer Requirements ───────────────────────────────────────
   async getRequirements(customerId?: string): Promise<CustomerRequirement[]> {
-    return simulateDelay(mockStore.getRequirements(customerId));
+    return (async () => {
+        const url = customerId
+          ? `/api/quote-requests?customerId=${customerId}`
+          : '/api/quote-requests';
+        return adaptRequirements(await apiFetch(url));
+      })();
   },
 
   async getRequirementById(id: string): Promise<CustomerRequirement | null> {
-    const req = mockStore.getRequirementById(id);
-    return simulateDelay(req || null);
+    return (async () => {
+        try {
+          return adaptRequirement(await apiFetch(`/api/quote-requests/${id}`));
+        } catch (e) {
+          throw e;
+        }
+      })();
   },
 
-  async createRequirement(payload: {
-    customerId: string;
-    customerName: string;
-    customerTier: CustomerTier;
-    title: string;
-    description: string;
-    items: RequirementItem[];
-    priority: RequirementPriority;
-    expectedDeliveryDays: number;
-    additionalNotes?: string;
-    assignedSalesExecutive?: string;
-  }): Promise<CustomerRequirement> {
-    return simulateDelay(mockStore.createRequirement(payload), 250);
-  },
+  async createRequirement(payload: {customerId:string;customerName:string;customerTier:CustomerTier;title:string;description:string;items:RequirementItem[];priority:RequirementPriority;expectedDeliveryDays:number;additionalNotes?:string;assignedSalesExecutive?:string}): Promise<CustomerRequirement> {
+  return adaptRequirement(await apiFetch('/api/quote-requests',{method:'POST',body:JSON.stringify({title:payload.title,description:payload.description,
+    targetDate:new Date(Date.now()+payload.expectedDeliveryDays*86400000).toISOString(),
+    metadata:{priority:payload.priority,expectedDeliveryDays:payload.expectedDeliveryDays,additionalNotes:payload.additionalNotes},
+    items:payload.items.map(item=>({description:item.name,quantity:item.quantity,requirements:{category:item.category,notes:item.notes}}))})}));
+},
 
-  async updateRequirementStatus(
-    id: string,
-    status: RequirementStatus,
-    quotationId?: string
-  ): Promise<CustomerRequirement> {
-    const updated = mockStore.updateRequirementStatus(id, status, quotationId);
-    if (!updated) {
-      throw new Error(`Requirement ${id} not found`);
-    }
-    return simulateDelay(updated, 200);
-  },
+  async updateRequirementStatus(id:string,status:RequirementStatus,_quotationId?:string):Promise<CustomerRequirement> {
+  if(status==='IN_REVIEW') await apiFetch('/api/quote-requests/'+id,{method:'PATCH',body:'{}'});
+  // Quotation creation and customer acceptance own the later requirement transitions.
+  return adaptRequirement(await apiFetch('/api/quote-requests/'+id));
+},
 
-  // System Utility
-  async resetDemoData(): Promise<{ success: boolean }> {
-    mockStore.resetToDefaults();
-    return simulateDelay({ success: true }, 100);
-  },
+  // ─── System Utility ──────────────────────────────────────────────
+  async resetDemoData():Promise<{success:boolean}> {return {success:true};},
 };

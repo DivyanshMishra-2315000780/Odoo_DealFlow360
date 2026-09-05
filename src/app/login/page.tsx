@@ -15,7 +15,6 @@ import {
   ShieldCheck,
   CheckCircle2,
   ArrowRight,
-  Building,
   KeyRound,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';

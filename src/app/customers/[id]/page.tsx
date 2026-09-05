@@ -84,7 +84,7 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
   // Negotiations (quotes in negotiation or with concession notes)
   const negotiationQuotes = useMemo(() => {
     return customerQuotes.filter(
-      (q) => q.status === 'IN_NEGOTIATION' || q.status === 'RETURNED' || q.items.some((i) => i.isViolation)
+      (q) => q.status === 'UNDER_NEGOTIATION' || q.status === 'REVISION_REQUIRED' || q.items.some((i) => i.isViolation)
     );
   }, [customerQuotes]);
 

@@ -17,21 +17,30 @@ import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { TierBadge } from '@/components/ui/tier-badge';
 import { useInvoices, useUpdateInvoiceStatus } from '@/hooks/use-dealflow';
+import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/providers/query-provider';
 import { formatCurrency } from '@/lib/utils';
 
 export default function CustomerInvoicesPage() {
   const { data: invoices = [], isLoading } = useInvoices();
   const updateInvoiceStatus = useUpdateInvoiceStatus();
+  const { user } = useAuth();
   const { toast } = useToast();
+
+  const customerInvoices = React.useMemo(() => {
+    if (!user) return invoices;
+    const compLower = (user.company || '').toLowerCase();
+    const filtered = invoices.filter(
+      (inv) =>
+        (inv.customerId && user.id && inv.customerId === user.customerId) ||
+        (inv.customerName && compLower && inv.customerName.toLowerCase().includes(compLower))
+    );
+    return filtered;
+  }, [invoices, user]);
 
   const handlePay = async (id: string) => {
     try {
-      await updateInvoiceStatus.mutateAsync({
-        id,
-        status: 'PAID',
-        paymentMethod: 'Corporate ACH Wire Transfer',
-      });
+      throw new Error('Ask your finance contact to reconcile your payment using the invoice number. Online checkout is not connected.');
       toast({
         title: `Invoice ${id} Paid`,
         description: 'Payment settlement confirmed. Receipt issued to your procurement email.',
@@ -53,11 +62,11 @@ export default function CustomerInvoicesPage() {
     });
   };
 
-  const totalOutstanding = invoices
-    .filter((i) => i.status === 'UNPAID')
+  const totalOutstanding = customerInvoices
+    .filter((i) => i.status === 'ISSUED')
     .reduce((acc, i) => acc + i.amount, 0);
 
-  const totalSettled = invoices
+  const totalSettled = customerInvoices
     .filter((i) => i.status === 'PAID')
     .reduce((acc, i) => acc + i.amount, 0);
 
@@ -128,7 +137,7 @@ export default function CustomerInvoicesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {invoices.map((inv) => (
+              {customerInvoices.map((inv) => (
                 <TableRow key={inv.id} className="hover:bg-slate-50/80 transition">
                   <TableCell>
                     <span className="font-mono font-bold text-slate-900 text-xs">{inv.id}</span>
@@ -161,7 +170,7 @@ export default function CustomerInvoicesPage() {
                         <Download className="w-3.5 h-3.5 text-slate-500" />
                         PDF
                       </Button>
-                      {inv.status === 'UNPAID' && (
+                      {inv.status === 'ISSUED' && (
                         !inv.isShipped ? (
                           <Button
                             variant="secondary"

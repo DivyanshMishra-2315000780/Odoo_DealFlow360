@@ -75,7 +75,7 @@ export default function CustomersListPage() {
     return customers.map((c) => {
       // Filter quotations for this customer
       const customerQuotes = quotations.filter((q) => q.customerId === c.id || q.customerName.toLowerCase() === c.name.toLowerCase());
-      const activeQuotes = customerQuotes.filter((q) => !['REJECTED', 'FULFILLED'].includes(q.status));
+      const activeQuotes = customerQuotes.filter((q) => !['REJECTED', 'FULFILLMENT'].includes(q.status));
       const activeQuotesValue = activeQuotes.reduce((acc, q) => acc + q.grandTotal, 0);
 
       // Filter open invoices

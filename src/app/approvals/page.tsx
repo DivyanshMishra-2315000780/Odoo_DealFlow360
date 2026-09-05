@@ -31,7 +31,7 @@ import { TableLoadingSkeleton } from '@/components/ui/loading-state';
 import { ErrorState } from '@/components/ui/error-state';
 import { Quotation, QuotationStatus, RiskLevel } from '@/types/dealflow';
 
-type ApprovalTab = 'PENDING' | 'RETURNED' | 'APPROVED' | 'REJECTED' | 'ALL';
+type ApprovalTab = 'PENDING' | 'REVISION_REQUIRED' | 'APPROVED' | 'REJECTED' | 'ALL';
 
 export default function ApprovalsPage() {
   const { data: quotations = [], isLoading, isError, refetch } = useQuotations();
@@ -55,15 +55,14 @@ export default function ApprovalsPage() {
   // Helper to get active step label
   const getCurrentStepLabel = (quote: Quotation): { label: string; tone: string } => {
     switch (quote.status) {
-      case 'PENDING_FINANCE_APPROVAL':
+      case 'PENDING_APPROVAL':
         return { label: 'Finance Review', tone: 'bg-amber-100 text-amber-900 border-amber-300' };
       case 'PENDING_APPROVAL':
-      case 'PENDING_DISCOUNT_APPROVAL':
         return {
           label: quote.salesManagerApproved ? 'Finance Review' : 'Sales Manager Review',
           tone: 'bg-amber-100 text-amber-900 border-amber-300',
         };
-      case 'RETURNED':
+      case 'REVISION_REQUIRED':
         return { label: 'Returned to AE', tone: 'bg-orange-100 text-orange-900 border-orange-300' };
       case 'APPROVED':
         return { label: 'Sign-Off Cleared', tone: 'bg-emerald-100 text-emerald-900 border-emerald-300' };
@@ -71,7 +70,7 @@ export default function ApprovalsPage() {
         return { label: 'Rejected by Policy', tone: 'bg-rose-100 text-rose-900 border-rose-300' };
       case 'CONFIRMED':
         return { label: 'Confirmed & Closed', tone: 'bg-teal-100 text-teal-900 border-teal-300' };
-      case 'IN_NEGOTIATION':
+      case 'UNDER_NEGOTIATION':
         return { label: 'Client Negotiation', tone: 'bg-blue-100 text-blue-900 border-blue-300' };
       case 'DRAFT':
       default:
@@ -85,12 +84,9 @@ export default function ApprovalsPage() {
       // Tab matching
       let matchesTab = true;
       if (activeTab === 'PENDING') {
-        matchesTab =
-          q.status === 'PENDING_APPROVAL' ||
-          q.status === 'PENDING_FINANCE_APPROVAL' ||
-          q.status === 'PENDING_DISCOUNT_APPROVAL';
-      } else if (activeTab === 'RETURNED') {
-        matchesTab = q.status === 'RETURNED';
+        matchesTab = q.status === 'PENDING_APPROVAL';
+      } else if (activeTab === 'REVISION_REQUIRED') {
+        matchesTab = q.status === 'REVISION_REQUIRED';
       } else if (activeTab === 'APPROVED') {
         matchesTab = q.status === 'APPROVED' || q.status === 'CONFIRMED';
       } else if (activeTab === 'REJECTED') {
@@ -114,17 +110,12 @@ export default function ApprovalsPage() {
 
   // Summary Metrics
   const stats = useMemo(() => {
-    const pending = quotations.filter(
-      (q) =>
-        q.status === 'PENDING_APPROVAL' ||
-        q.status === 'PENDING_FINANCE_APPROVAL' ||
-        q.status === 'PENDING_DISCOUNT_APPROVAL'
-    );
+    const pending = quotations.filter((q) => q.status === 'PENDING_APPROVAL');
     const valueAtRisk = pending.reduce((sum, q) => sum + q.grandTotal, 0);
     const criticalCount = quotations.filter(
       (q) => q.riskDiagnosis.level === 'CRITICAL' || q.riskDiagnosis.level === 'HIGH'
     ).length;
-    const returnedCount = quotations.filter((q) => q.status === 'RETURNED').length;
+    const returnedCount = quotations.filter((q) => q.status === 'REVISION_REQUIRED').length;
 
     return {
       pendingCount: pending.length,
@@ -245,7 +236,7 @@ export default function ApprovalsPage() {
               {(
                 [
                   { key: 'PENDING', label: 'Pending Sign-Off', count: stats.pendingCount },
-                  { key: 'RETURNED', label: 'Returned for Revision', count: stats.returnedCount },
+                  { key: 'REVISION_REQUIRED', label: 'Returned for Revision', count: stats.returnedCount },
                   { key: 'APPROVED', label: 'Approved', count: undefined },
                   { key: 'REJECTED', label: 'Rejected', count: undefined },
                   { key: 'ALL', label: 'All Decisions', count: undefined },

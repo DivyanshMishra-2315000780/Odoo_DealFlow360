@@ -63,7 +63,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const router = useRouter();
   const resetMutation = useResetDemoData();
   const { toast } = useToast();
-  const { user, switchRole, logout } = useAuth();
+  const { user, isLoading, switchRole, logout } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -72,6 +72,12 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (isLoading || pathname === '/login' || pathname === '/signup') return;
+    if (!user) router.replace('/login');
+    else if (user.role === 'CUSTOMER' && !pathname.startsWith('/portal')) router.replace('/portal');
+    else if (user.role !== 'CUSTOMER' && pathname.startsWith('/portal')) router.replace('/');
+  }, [isLoading, user, pathname, router]);
   // Keyboard shortcut for Cmd+K / Ctrl+K
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -349,8 +355,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     try {
       await resetMutation.mutateAsync();
       toast({
-        title: 'Demo Data Restored',
-        description: 'All mock quotations, audits, and invoices have been reset to default seeds.',
+        title: 'Data Refreshed',
+        description: 'Latest records have been requested from the server.',
         type: 'success',
       });
     } catch {
@@ -366,8 +372,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     switchRole(newRole);
     setIsRoleDropdownOpen(false);
     toast({
-      title: 'Active Role Switched',
-      description: `Switched perspective to ${newRole.replace(/_/g, ' ')}. Navigation updated.`,
+      title: 'Sign in to another account',
+      description: 'Access follows the account authenticated by the server.',
       type: 'info',
     });
   };
@@ -384,8 +390,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     'Deal Health',
   ];
 
-  // Distraction-free full-screen layout for authentication pages (placed after all hooks)
-  if (pathname === '/login' || pathname === '/signup') {
+  if (pathname !== '/login' && pathname !== '/signup' && (isLoading || !user || (user.role === 'CUSTOMER' && !pathname.startsWith('/portal')) || (user.role !== 'CUSTOMER' && pathname.startsWith('/portal')))) return <div className="p-12 text-center">Loading session...</div>;
+  // Distraction-free full-screen layout for authentication & customer portal pages (placed after all hooks)
+  if (pathname === '/login' || pathname === '/signup' || pathname?.startsWith('/portal')) {
     return <>{children}</>;
   }
 

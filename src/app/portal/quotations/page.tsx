@@ -26,7 +26,16 @@ export default function CustomerQuotationsPage() {
   const customerName = user?.company || 'Acme Corporation';
 
   // Filter for this customer or show all deals with Acme highlighted
-  const myQuotations = quotations;
+  const myQuotations = React.useMemo(() => {
+    if (!user) return quotations;
+    const compLower = (user.company || '').toLowerCase();
+    const filtered = quotations.filter(
+      (q) =>
+        (q.customerId && user.id && q.customerId === user.customerId) ||
+        (q.customerName && compLower && q.customerName.toLowerCase().includes(compLower))
+    );
+    return filtered;
+  }, [quotations, user]);
 
   return (
     <div className="space-y-6 pb-12">

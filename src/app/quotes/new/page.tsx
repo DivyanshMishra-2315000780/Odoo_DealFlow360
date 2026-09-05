@@ -60,35 +60,7 @@ function getProductCost(prod?: Product): number {
   return Math.round(prod.basePrice * 0.40 * 100) / 100;
 }
 
-const UPSELL_SUGGESTIONS: UpsellSuggestion[] = [
-  {
-    id: 'up-docking',
-    productId: 'PROD-102',
-    title: 'Docking Station (Thunderbolt 4)',
-    tag: 'Hardware Bundle Lift',
-    reason: 'Enterprise standard: 94% of laptop orders attach docking hubs for hot-desking.',
-    marginLift: '+4.2% Margin Lift',
-    suggestedQty: 5,
-  },
-  {
-    id: 'up-care',
-    productId: 'PROD-105',
-    title: '24/7 Enterprise Care Plan',
-    tag: 'High-Margin MRR',
-    reason: 'Attaches 4-hour priority replacement SLA; yields 72% gross service margin.',
-    marginLift: '+6.8% Margin Lift',
-    suggestedQty: 1,
-  },
-  {
-    id: 'up-warranty',
-    productId: 'PROD-104',
-    title: '3-Year Extended Hardware Warranty',
-    tag: 'Margin Protection',
-    reason: 'Locks in long-term coverage buffer; reduces post-sale warranty exception friction.',
-    marginLift: '+3.5% Margin Lift',
-    suggestedQty: 2,
-  },
-];
+const UPSELL_SUGGESTIONS: UpsellSuggestion[] = [];
 
 function NewQuotationForm() {
   const router = useRouter();
@@ -105,7 +77,7 @@ function NewQuotationForm() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [title, setTitle] = useState<string>('Enterprise System Deployment Proposal');
   const [priceList, setPriceList] = useState<PriceList>('Standard Commercial 2026');
-  const [deliveryDate, setDeliveryDate] = useState<string>('2026-10-25');
+  const [deliveryDate, setDeliveryDate] = useState<string>(new Date(Date.now()+30*86400000).toISOString().slice(0,10));
   const [notes, setNotes] = useState<string>('Standard 30-day procurement payment terms. Priority hardware staging included.');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [hasPrefilledFromReq, setHasPrefilledFromReq] = useState<boolean>(false);
@@ -147,14 +119,14 @@ function NewQuotationForm() {
           }
 
           if (!matchedProd) {
-            matchedProd = products[idx % products.length];
+            matchedProd = undefined;
           }
 
           return {
             tempId: `line-req-${idx + 1}-${Date.now()}`,
-            productId: matchedProd.id,
+            productId: matchedProd?.id ?? '',
             quantity: reqItem.quantity,
-            unitPrice: matchedProd.basePrice,
+            unitPrice: matchedProd?.basePrice ?? 0,
             discountPercent: 5,
           };
         });
@@ -176,22 +148,7 @@ function NewQuotationForm() {
   }, [customers, selectedCustomerId]);
 
   // Multi-line Items State
-  const [lines, setLines] = useState<DraftLineState[]>([
-    {
-      tempId: 'line-1',
-      productId: 'PROD-101', // Laptop Pro 14
-      quantity: 10,
-      unitPrice: 1499,
-      discountPercent: 12,
-    },
-    {
-      tempId: 'line-2',
-      productId: 'PROD-103', // Onsite Setup (Services)
-      quantity: 2,
-      unitPrice: 750,
-      discountPercent: 10,
-    },
-  ]);
+  const [lines, setLines] = useState<DraftLineState[]>([]);
 
   // Ensure default lines have valid product IDs once products load
   React.useEffect(() => {
@@ -366,7 +323,7 @@ function NewQuotationForm() {
     let status: Quotation['status'] = 'DRAFT';
     if (intent === 'SUBMIT') {
       if (dealEvaluation.riskDiagnosis.requiresFinanceApproval) {
-        status = 'PENDING_FINANCE_APPROVAL';
+        status = 'PENDING_APPROVAL';
       } else if (dealEvaluation.riskDiagnosis.level === 'MEDIUM') {
         status = 'PENDING_APPROVAL';
       } else {
@@ -385,10 +342,8 @@ function NewQuotationForm() {
         details:
           intent === 'DRAFT'
             ? `Draft created for ${selectedCustomer.name}.`
-            : status === 'PENDING_FINANCE_APPROVAL'
-            ? `Submitted for Finance approval due to policy exception (${dealEvaluation.riskDiagnosis.whatHappened}).`
             : status === 'PENDING_APPROVAL'
-            ? `Submitted for Sales Manager sign-off (${dealEvaluation.riskDiagnosis.whatHappened}).`
+            ? `Submitted for approval due to policy exception (${dealEvaluation.riskDiagnosis.whatHappened}).`
             : `Submitted and cleared automatically within ${selectedCustomer.tier} margin bounds.`,
         badgeType: intent === 'DRAFT' ? 'default' : status === 'APPROVED' ? 'success' : 'warning',
       } as const,
@@ -418,13 +373,13 @@ function NewQuotationForm() {
     };
 
     try {
-      await saveMutation.mutateAsync(quotationPayload);
+      const saved = await saveMutation.mutateAsync(quotationPayload);
       toast({
         title: intent === 'DRAFT' ? 'Draft Saved' : 'Quotation Submitted',
-        description: `Quotation ${newQuoteId} has been successfully recorded in the deal pipeline.`,
+        description: `Quotation ${saved.id} has been successfully recorded in the deal pipeline.`,
         type: 'success',
       });
-      router.push(`/quotes/${newQuoteId}`);
+      router.push(`/quotes/${saved.id}`);
     } catch {
       toast({
         title: 'Submission Failed',

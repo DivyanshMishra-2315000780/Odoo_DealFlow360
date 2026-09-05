@@ -26,7 +26,7 @@ import {
   evaluateLineItem,
   evaluateQuotationRisk,
 } from '@/lib/discount-engine';
-import { AlertCircle, CheckCircle2, Plus, Trash2, Sparkles } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Plus, Sparkles } from 'lucide-react';
 
 interface NewQuotationDialogProps {
   open: boolean;
@@ -86,7 +86,7 @@ export function NewQuotationDialog({
 
     const evaluation = evaluateQuotationRisk([evaluatedItem], currentTier);
     const status: Quotation['status'] = evaluatedItem.isViolation
-      ? 'PENDING_FINANCE_APPROVAL'
+      ? 'PENDING_APPROVAL'
       : 'APPROVED';
 
     const newQuotation: Quotation = {
@@ -117,16 +117,16 @@ export function NewQuotationDialog({
     };
 
     try {
-      await saveQuotation.mutateAsync(newQuotation);
+      const saved = await saveQuotation.mutateAsync(newQuotation);
       toast({
-        title: `Quotation ${quotationId} Created`,
+        title: `Quotation ${saved.id} Created`,
         description: evaluatedItem.isViolation
           ? `Discount violates ${selectedProduct.category} limit (+${excess}% excess). Escalated to Finance Approval.`
-          : `Quotation is policy-compliant and approved.`,
+          : `Quotation submitted for manager and finance approval.`,
         type: evaluatedItem.isViolation ? 'warning' : 'success',
       });
       onOpenChange(false);
-      onSuccess?.(newQuotation);
+      onSuccess?.(saved);
     } catch {
       toast({
         title: 'Failed to create quotation',

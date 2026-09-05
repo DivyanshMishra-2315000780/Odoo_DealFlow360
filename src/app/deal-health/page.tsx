@@ -97,6 +97,19 @@ export default function DealHealthPage() {
   // Handle Nudge Action
   const handleNudgeSubmit = async () => {
     setIsSubmitting(true);
+    try {
+      await fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'STALLED_DEAL_NUDGE',
+          message: 'Commercial nudge email dispatched for quotation Q-1028 to Zenith procurement.',
+          linkUrl: '/quotes/Q-1028',
+        }),
+      });
+    } catch {
+      // non-blocking
+    }
     await new Promise((resolve) => setTimeout(resolve, 600));
     setStalledDeals((prev) =>
       prev.map((d) =>
@@ -125,6 +138,19 @@ export default function DealHealthPage() {
   // Handle Discount Review
   const handleDiscountReviewSubmit = async () => {
     setIsSubmitting(true);
+    try {
+      await fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'DISCOUNT_RESTRUCTURED',
+          message: 'Discount restructured for Q-1052. Category ceiling enforced.',
+          linkUrl: '/quotes/Q-1052',
+        }),
+      });
+    } catch {
+      // non-blocking
+    }
     await new Promise((resolve) => setTimeout(resolve, 600));
     setDiscountAnomalies((prev) =>
       prev.map((a) =>
@@ -153,6 +179,19 @@ export default function DealHealthPage() {
   // Handle Stock Shortage Resolution
   const handleStockResolveSubmit = async () => {
     setIsSubmitting(true);
+    try {
+      await fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'WAREHOUSE_TRANSFER',
+          message: 'Warehouse transfer dispatched for FUL-803: 8 units routed from West Hub.',
+          linkUrl: '/fulfillment/FUL-803',
+        }),
+      });
+    } catch {
+      // non-blocking
+    }
     await new Promise((resolve) => setTimeout(resolve, 600));
     setDeliveryRisks((prev) =>
       prev.map((r) =>

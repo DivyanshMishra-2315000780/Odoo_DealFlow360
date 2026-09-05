@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useId } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { CheckCircle2, AlertTriangle, XCircle, Info, X } from 'lucide-react';
 
 interface ToastItem {
@@ -25,10 +25,11 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
+        mutationCache: new MutationCache({ onSuccess: () => { void queryClient.invalidateQueries(); } }),
         defaultOptions: {
           queries: {
             staleTime: 1000 * 30, // 30 seconds
-            refetchOnWindowFocus: false,
+            refetchOnWindowFocus: true,
           },
         },
       })

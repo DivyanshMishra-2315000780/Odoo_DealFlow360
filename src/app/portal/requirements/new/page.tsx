@@ -47,9 +47,9 @@ export default function NewCustomerRequirementPage() {
   // Active customer context from authenticated user
   const customerName = user?.company || 'ABC Manufacturing';
   const matchedCustomer = customers.find(
-    (c) => c.name.toLowerCase() === customerName.toLowerCase()
+    (c) => c.id === user?.customerId
   ) || {
-    id: 'CUST-006',
+    id: user?.customerId ?? '',
     name: customerName,
     tier: (user?.tier as CustomerTier) || 'Silver',
   };

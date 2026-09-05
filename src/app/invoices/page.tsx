@@ -53,7 +53,7 @@ export default function InvoicesListPage() {
       } else if (inv.status === 'PARTIALLY_PAID') {
         partiallyPaidCount++;
         partiallyPaidAmount += inv.remainingAmount ?? inv.amount;
-      } else if (inv.status === 'UNPAID') {
+      } else if (inv.status === 'ISSUED') {
         unpaidCount++;
         unpaidAmount += inv.amount;
       }
@@ -134,11 +134,11 @@ export default function InvoicesListPage() {
         {/* Unpaid Counter */}
         <Card
           className={`cursor-pointer transition-all ${
-            selectedStatusTab === 'UNPAID'
+            selectedStatusTab === 'ISSUED'
               ? 'ring-2 ring-slate-800 shadow-md'
               : 'hover:border-slate-300'
           }`}
-          onClick={() => setSelectedStatusTab(selectedStatusTab === 'UNPAID' ? 'ALL' : 'UNPAID')}
+          onClick={() => setSelectedStatusTab(selectedStatusTab === 'ISSUED' ? 'ALL' : 'ISSUED')}
         >
           <CardContent className="p-5">
             <div className="flex items-center justify-between text-slate-500">
@@ -242,7 +242,7 @@ export default function InvoicesListPage() {
               {(
                 [
                   { id: 'ALL', label: 'All Invoices' },
-                  { id: 'UNPAID', label: 'Unpaid' },
+                  { id: 'ISSUED', label: 'Unpaid' },
                   { id: 'PARTIALLY_PAID', label: 'Partially Paid' },
                   { id: 'PAID', label: 'Paid' },
                   { id: 'OVERDUE', label: 'Overdue' },
@@ -404,7 +404,7 @@ export default function InvoicesListPage() {
                           >
                             {invoice.paymentStatus === 'PAID' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
                             {invoice.paymentStatus === 'PARTIALLY_PAID' && <Clock className="w-3.5 h-3.5 text-sky-600" />}
-                            {invoice.paymentStatus === 'UNPAID' && <Clock className="w-3.5 h-3.5 text-slate-400" />}
+                            {invoice.paymentStatus === 'ISSUED' && <Clock className="w-3.5 h-3.5 text-slate-400" />}
                             {invoice.paymentStatus === 'PAID'
                               ? 'Paid'
                               : invoice.paymentStatus === 'PARTIALLY_PAID'

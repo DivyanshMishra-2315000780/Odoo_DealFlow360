@@ -121,17 +121,47 @@ export interface QuotationLineItem {
   lineTotal: number;
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Quotation Status — aligned with backend state machine (13 states)
+// Lifecycle: DRAFT → PENDING_APPROVAL → APPROVED → SENT →
+//            UNDER_NEGOTIATION ↔ RE_APPROVAL_REQUIRED →
+//            CONFIRMED → FULFILLMENT → BILLING → COMPLETED
+// Terminal: REJECTED, REVISION_REQUIRED, CANCELLED
+// ──────────────────────────────────────────────────────────────────────
 export type QuotationStatus =
   | 'DRAFT'
-  | 'PENDING_APPROVAL'
-  | 'PENDING_DISCOUNT_APPROVAL'
-  | 'PENDING_FINANCE_APPROVAL'
+  | 'PENDING_APPROVAL'         // Unified: replaces PENDING_DISCOUNT_APPROVAL & PENDING_FINANCE_APPROVAL
   | 'APPROVED'
+  | 'SENT'                     // Quote dispatched to customer portal
+  | 'UNDER_NEGOTIATION'        // Customer counter-offer in progress (replaces IN_NEGOTIATION)
+  | 'RE_APPROVAL_REQUIRED'     // After negotiation, needs re-approval before re-sending
+  | 'CONFIRMED'                // Customer accepted & bound
+  | 'FULFILLMENT'              // Warehouse allocation & shipping (replaces FULFILLED)
+  | 'BILLING'                  // Invoice generated
+  | 'COMPLETED'                // Payment received, deal closed
+  | 'REJECTED'                 // Approval denied
+  | 'REVISION_REQUIRED'        // Returned for revision (replaces RETURNED)
+  | 'CANCELLED';               // Deal cancelled at any stage
+
+// Legacy status aliases for backward compatibility during migration
+export type LegacyQuotationStatus =
+  | 'PENDING_FINANCE_APPROVAL'
+  | 'PENDING_DISCOUNT_APPROVAL'
   | 'IN_NEGOTIATION'
-  | 'CONFIRMED'
   | 'RETURNED'
-  | 'REJECTED'
   | 'FULFILLED';
+
+/** Maps legacy frontend status names to the backend-canonical status */
+export function normalizeQuotationStatus(status: string): QuotationStatus {
+  const LEGACY_MAP: Record<string, QuotationStatus> = {
+    'PENDING_FINANCE_APPROVAL': 'PENDING_APPROVAL',
+    'PENDING_DISCOUNT_APPROVAL': 'PENDING_APPROVAL',
+    'IN_NEGOTIATION': 'UNDER_NEGOTIATION',
+    'RETURNED': 'REVISION_REQUIRED',
+    'FULFILLED': 'FULFILLMENT',
+  };
+  return (LEGACY_MAP[status] ?? status) as QuotationStatus;
+}
 
 export const PRICE_LISTS = [
   'Standard Commercial 2026',
@@ -191,6 +221,9 @@ export interface CustomerRequirement {
 }
 
 export interface Quotation {
+  approvalRole?: string;
+  negotiation?: { customerNotes: string; changes: Array<{quotationLineId:string;fieldChanged:string;originalValue:string;requestedValue:string}> };
+
   id: string; // e.g. "Q-1042"
   requirementId?: string; // Originating requirement link
   customerId: string;
@@ -218,8 +251,31 @@ export interface Quotation {
   fulfillmentStatus?: string;
 }
 
-export type InvoiceStatus = 'UNPAID' | 'PAID' | 'PARTIALLY_PAID' | 'OVERDUE';
-export type PaymentStatus = 'UNPAID' | 'PARTIALLY_PAID' | 'PAID';
+// ──────────────────────────────────────────────────────────────────────
+// Invoice Status — aligned with backend enum
+// ──────────────────────────────────────────────────────────────────────
+export type InvoiceStatus = 'DRAFT' | 'ISSUED' | 'PARTIALLY_PAID' | 'PAID' | 'OVERDUE' | 'VOID';
+// Legacy aliases
+export type LegacyInvoiceStatus = 'ISSUED';
+
+export function normalizeInvoiceStatus(status: string): InvoiceStatus {
+  const LEGACY_MAP: Record<string, InvoiceStatus> = {
+    'ISSUED': 'ISSUED',
+  };
+  return (LEGACY_MAP[status] ?? status) as InvoiceStatus;
+}
+
+export type PaymentStatus =
+  | 'CREATED'
+  | 'PENDING'
+  | 'SUCCESS'
+  | 'FAILED'
+  | 'REFUNDED'
+  | 'UNPAID'
+  | 'PARTIALLY_PAID'
+  | 'PAID'
+  | 'ISSUED';
+
 export type InvoiceLifecycleStage = 'ORDER_CONFIRMED' | 'SHIPPED' | 'INVOICED' | 'PAID';
 export type ChargeType = 'ONE_TIME' | 'RECURRING';
 
@@ -264,7 +320,27 @@ export interface Invoice {
   notes?: string;
 }
 
-export type FulfillmentStatus = 'PENDING' | 'PREPARING' | 'IN_TRANSIT' | 'DELIVERED';
+// ──────────────────────────────────────────────────────────────────────
+// Fulfillment Status — aligned with backend enum + UI stages
+// ──────────────────────────────────────────────────────────────────────
+export type FulfillmentStatus =
+  | 'PENDING'
+  | 'PARTIAL'
+  | 'ALLOCATED'
+  | 'SHIPPED'
+  | 'DELIVERED'
+  | 'BACKORDERED'
+  | 'PREPARING'
+  | 'IN_TRANSIT';
+
+// Legacy aliases
+export function normalizeFulfillmentStatus(status: string): FulfillmentStatus {
+  const LEGACY_MAP: Record<string, FulfillmentStatus> = {
+    'PREPARING': 'PARTIAL',
+    'IN_TRANSIT': 'SHIPPED',
+  };
+  return (LEGACY_MAP[status] ?? status) as FulfillmentStatus;
+}
 
 export interface WarehouseStock {
   warehouseId: string;
@@ -317,7 +393,7 @@ export interface SubscriptionInvoiceItem {
   id: string; // e.g. "INV-1044"
   date: string;
   amount: number;
-  status: 'PAID' | 'UNPAID' | 'PARTIALLY_PAID';
+  status: 'PAID' | 'ISSUED' | 'PARTIALLY_PAID';
   period: string; // e.g. "Aug 1 - Aug 31, 2026"
 }
 
