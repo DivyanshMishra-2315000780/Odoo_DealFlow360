@@ -35,6 +35,8 @@ import {
   LogOut,
   Shield,
   HelpCircle,
+  Inbox,
+  ClipboardList,
 } from 'lucide-react';
 import { useResetDemoData } from '@/hooks/use-dealflow';
 import { useToast } from '@/components/providers/query-provider';
@@ -116,11 +118,6 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     setIsSearchDropdownOpen(false);
   }, [pathname]);
 
-  // Distraction-free full-screen layout for authentication pages
-  if (pathname === '/login' || pathname === '/signup') {
-    return <>{children}</>;
-  }
-
   // Active user role normalization
   const currentRole = normalizeRole(user?.role);
   const roleMeta = getRoleMeta(currentRole);
@@ -136,6 +133,13 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             icon: LayoutDashboard,
             badge: 'Client',
             tooltip: 'Customer procurement overview, active deals & messages',
+          },
+          {
+            label: 'My Requirements',
+            href: '/portal/requirements',
+            icon: ClipboardList,
+            badge: 'Intake',
+            tooltip: 'Submit demand requirements for sales executive quotation',
           },
           {
             label: 'My Quotations',
@@ -171,6 +175,13 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             href: '/',
             icon: Activity,
             tooltip: 'Executive pipeline overview & immediate action required',
+          },
+          {
+            label: 'Customer Requests',
+            href: '/requirements',
+            icon: Inbox,
+            badge: 'Intake',
+            tooltip: 'Incoming customer intake requirements awaiting quotation modeling',
           },
           {
             label: 'Quotations',
@@ -300,12 +311,6 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             tooltip: 'DealFlow360 platform health & governance overview',
           },
           {
-            label: 'Team & Stakeholders',
-            href: '/customers',
-            icon: UserCheck,
-            tooltip: 'Account executive rosters, sales desks & assignees',
-          },
-          {
             label: 'Customer Accounts',
             href: '/customers',
             icon: Users,
@@ -378,6 +383,11 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     'Invoice',
     'Deal Health',
   ];
+
+  // Distraction-free full-screen layout for authentication pages (placed after all hooks)
+  if (pathname === '/login' || pathname === '/signup') {
+    return <>{children}</>;
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 selection:bg-teal-100 selection:text-teal-900">

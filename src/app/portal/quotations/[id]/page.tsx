@@ -19,6 +19,8 @@ import {
   Lock,
   DollarSign,
   FileCheck,
+  Inbox,
+  ExternalLink,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
@@ -87,6 +89,24 @@ export default function CustomerQuotationDetailPage() {
 
       const noteDetails = `Client Counter-Proposal: Requested ${requestedSetupDiscount}% Onsite Setup discount (Allowed: ${setupAllowedLimit}%). Target delivery: ${requestedDeliveryDate}. Note: "${comment.trim()}"`;
 
+      // Update line items reflecting counter-proposal
+      const updatedItems = quotation.items.map((item) => {
+        if (item.category === 'Services' || item.productName.toLowerCase().includes('setup')) {
+          const isViolation = requestedSetupDiscount > item.effectiveLimit;
+          const excessPercent = isViolation ? requestedSetupDiscount - item.effectiveLimit : 0;
+          const rawTotal = item.unitPrice * item.quantity;
+          const lineTotal = Math.round((rawTotal * (1 - requestedSetupDiscount / 100)) * 100) / 100;
+          return {
+            ...item,
+            discountPercent: requestedSetupDiscount,
+            isViolation,
+            excessPercent,
+            lineTotal,
+          };
+        }
+        return item;
+      });
+
       await updateQuotationStatus.mutateAsync({
         id: quotation.id,
         status: isOverLimit ? 'PENDING_APPROVAL' : 'IN_NEGOTIATION',
@@ -98,6 +118,7 @@ export default function CustomerQuotationDetailPage() {
           deliveryDate: requestedDeliveryDate,
           salesManagerApproved: false,
           financeApproved: false,
+          items: updatedItems,
         },
       });
 
@@ -157,7 +178,19 @@ export default function CustomerQuotationDetailPage() {
           <ArrowLeft className="w-3.5 h-3.5" />
           Back to My Quotations
         </Link>
-        <span className="text-xs text-slate-400 font-mono">Deal ID: {quotation.id}</span>
+        <div className="flex items-center gap-3">
+          {quotation.requirementId && (
+            <Link
+              href={`/portal/requirements/${quotation.requirementId}`}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 transition-colors"
+            >
+              <Inbox className="w-3.5 h-3.5" />
+              <span>Originated from {quotation.requirementId}</span>
+              <ExternalLink className="w-3 h-3 ml-0.5" />
+            </Link>
+          )}
+          <span className="text-xs text-slate-400 font-mono">Deal ID: {quotation.id}</span>
+        </div>
       </div>
 
       {/* RE-APPROVAL NOTICE BANNER (STEP 9 & 10) */}

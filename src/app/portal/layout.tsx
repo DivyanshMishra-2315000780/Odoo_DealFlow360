@@ -13,6 +13,7 @@ import {
   Building,
   ShieldCheck,
   RefreshCcw,
+  ClipboardList,
 } from 'lucide-react';
 import { TierBadge } from '@/components/ui/tier-badge';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
   const portalNav = [
     { label: 'Overview', href: '/portal', icon: LayoutDashboard },
+    { label: 'My Requirements', href: '/portal/requirements', icon: ClipboardList },
     { label: 'My Quotations', href: '/portal/quotations', icon: FileText },
     { label: 'Invoices', href: '/portal/invoices', icon: CreditCard },
     { label: 'Subscriptions', href: '/portal/profile#subscriptions', icon: RefreshCcw },

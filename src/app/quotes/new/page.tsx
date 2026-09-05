@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useMemo, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   FileText,
@@ -17,8 +17,13 @@ import {
   Building2,
   DollarSign,
   Layers,
+  TrendingUp,
+  Tag,
+  X,
+  Inbox,
+  ExternalLink,
 } from 'lucide-react';
-import { useCustomers, useProducts, useSaveQuotation } from '@/hooks/use-dealflow';
+import { useCustomers, useProducts, useSaveQuotation, useRequirement } from '@/hooks/use-dealflow';
 import { useToast } from '@/components/providers/query-provider';
 import { formatCurrency, formatPercent } from '@/lib/utils';
 import { evaluateLineItem, evaluateQuotationRisk, calculateEffectiveDiscountLimit } from '@/lib/discount-engine';
@@ -39,8 +44,58 @@ interface DraftLineState {
   discountPercent: number;
 }
 
-export default function NewQuotationPage() {
+interface UpsellSuggestion {
+  id: string;
+  productId: string;
+  title: string;
+  tag: string;
+  reason: string;
+  marginLift: string;
+  suggestedQty: number;
+}
+
+function getProductCost(prod?: Product): number {
+  if (!prod) return 0;
+  if (prod.category === 'Hardware') return Math.round(prod.basePrice * 0.60 * 100) / 100;
+  return Math.round(prod.basePrice * 0.40 * 100) / 100;
+}
+
+const UPSELL_SUGGESTIONS: UpsellSuggestion[] = [
+  {
+    id: 'up-docking',
+    productId: 'PROD-102',
+    title: 'Docking Station (Thunderbolt 4)',
+    tag: 'Hardware Bundle Lift',
+    reason: 'Enterprise standard: 94% of laptop orders attach docking hubs for hot-desking.',
+    marginLift: '+4.2% Margin Lift',
+    suggestedQty: 5,
+  },
+  {
+    id: 'up-care',
+    productId: 'PROD-105',
+    title: '24/7 Enterprise Care Plan',
+    tag: 'High-Margin MRR',
+    reason: 'Attaches 4-hour priority replacement SLA; yields 72% gross service margin.',
+    marginLift: '+6.8% Margin Lift',
+    suggestedQty: 1,
+  },
+  {
+    id: 'up-warranty',
+    productId: 'PROD-104',
+    title: '3-Year Extended Hardware Warranty',
+    tag: 'Margin Protection',
+    reason: 'Locks in long-term coverage buffer; reduces post-sale warranty exception friction.',
+    marginLift: '+3.5% Margin Lift',
+    suggestedQty: 2,
+  },
+];
+
+function NewQuotationForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requirementId = searchParams.get('requirementId');
+  const { data: requirement } = useRequirement(requirementId || '');
+
   const { toast } = useToast();
   const { data: customers = [] } = useCustomers();
   const { data: products = [] } = useProducts();
@@ -53,13 +108,68 @@ export default function NewQuotationPage() {
   const [deliveryDate, setDeliveryDate] = useState<string>('2026-10-25');
   const [notes, setNotes] = useState<string>('Standard 30-day procurement payment terms. Priority hardware staging included.');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [hasPrefilledFromReq, setHasPrefilledFromReq] = useState<boolean>(false);
 
   // Default initial customer
   React.useEffect(() => {
-    if (customers.length > 0 && !selectedCustomerId) {
+    if (customers.length > 0 && !selectedCustomerId && !requirementId) {
       setSelectedCustomerId(customers[0].id);
     }
-  }, [customers, selectedCustomerId]);
+  }, [customers, selectedCustomerId, requirementId]);
+
+  // Pre-fill state when originating from a Customer Requirement
+  React.useEffect(() => {
+    if (requirement && products.length > 0 && !hasPrefilledFromReq) {
+      setSelectedCustomerId(requirement.customerId);
+      setTitle(`Quotation for ${requirement.title}`);
+      if (requirement.additionalNotes || requirement.description) {
+        setNotes(`Customer Requirement notes: ${requirement.additionalNotes || requirement.description}\nStandard 30-day procurement payment terms apply.`);
+      }
+
+      // Map requirement items to existing catalog products
+      if (requirement.items && requirement.items.length > 0) {
+        const mappedLines: DraftLineState[] = requirement.items.map((reqItem, idx) => {
+          const lowerName = reqItem.name.toLowerCase();
+          let matchedProd = products.find((p) => p.name.toLowerCase().includes(lowerName));
+
+          if (!matchedProd) {
+            if (lowerName.includes('laptop') || lowerName.includes('pc') || lowerName.includes('computer')) {
+              matchedProd = products.find((p) => p.id === 'PROD-101');
+            } else if (lowerName.includes('dock') || lowerName.includes('hub')) {
+              matchedProd = products.find((p) => p.id === 'PROD-102');
+            } else if (lowerName.includes('setup') || lowerName.includes('install') || lowerName.includes('service')) {
+              matchedProd = products.find((p) => p.id === 'PROD-103');
+            } else if (lowerName.includes('warranty')) {
+              matchedProd = products.find((p) => p.id === 'PROD-104');
+            } else if (lowerName.includes('care') || lowerName.includes('support')) {
+              matchedProd = products.find((p) => p.id === 'PROD-105');
+            }
+          }
+
+          if (!matchedProd) {
+            matchedProd = products[idx % products.length];
+          }
+
+          return {
+            tempId: `line-req-${idx + 1}-${Date.now()}`,
+            productId: matchedProd.id,
+            quantity: reqItem.quantity,
+            unitPrice: matchedProd.basePrice,
+            discountPercent: 5,
+          };
+        });
+
+        setLines(mappedLines);
+      }
+
+      setHasPrefilledFromReq(true);
+      toast({
+        title: 'Requirement Data Imported',
+        description: `Successfully loaded customer demand items from ${requirement.id}.`,
+        type: 'info',
+      });
+    }
+  }, [requirement, products, hasPrefilledFromReq, toast]);
 
   const selectedCustomer = useMemo(() => {
     return customers.find((c) => c.id === selectedCustomerId) || customers[0];
@@ -197,6 +307,47 @@ export default function NewQuotationPage() {
     return evaluateQuotationRisk(evaluatedLines, selectedCustomer.tier);
   }, [evaluatedLines, selectedCustomer]);
 
+  // Upsell state & handlers
+  const [dismissedUpsells, setDismissedUpsells] = useState<string[]>([]);
+
+  const handleAddUpsell = (rec: UpsellSuggestion) => {
+    const prod = products.find((p) => p.id === rec.productId);
+    if (!prod) return;
+    setLines((prev) => [
+      ...prev,
+      {
+        tempId: `line-upsell-${Date.now()}`,
+        productId: prod.id,
+        quantity: rec.suggestedQty,
+        unitPrice: prod.basePrice,
+        discountPercent: 0,
+      },
+    ]);
+    toast({
+      title: 'Upsell Attached',
+      description: `${rec.title} attached with 0% discount (${rec.marginLift}). Deal gross margin improved.`,
+      type: 'success',
+    });
+  };
+
+  const handleDismissUpsell = (id: string) => {
+    setDismissedUpsells((prev) => [...prev, id]);
+  };
+
+  // Margin calculation across all lines
+  const totalCost = useMemo(() => {
+    return lines.reduce((sum, l) => {
+      const p = products.find((prod) => prod.id === l.productId);
+      return sum + getProductCost(p) * l.quantity;
+    }, 0);
+  }, [lines, products]);
+
+  const dealGrossMargin = useMemo(() => {
+    if (dealEvaluation.grandTotal <= 0) return 0;
+    const profit = Math.max(0, dealEvaluation.grandTotal - totalCost);
+    return Math.round((profit / dealEvaluation.grandTotal) * 100);
+  }, [dealEvaluation.grandTotal, totalCost]);
+
   // Submission handler
   const handleSave = async (intent: 'DRAFT' | 'SUBMIT') => {
     if (!selectedCustomer) return;
@@ -216,6 +367,8 @@ export default function NewQuotationPage() {
     if (intent === 'SUBMIT') {
       if (dealEvaluation.riskDiagnosis.requiresFinanceApproval) {
         status = 'PENDING_FINANCE_APPROVAL';
+      } else if (dealEvaluation.riskDiagnosis.level === 'MEDIUM') {
+        status = 'PENDING_APPROVAL';
       } else {
         status = 'APPROVED';
       }
@@ -234,6 +387,8 @@ export default function NewQuotationPage() {
             ? `Draft created for ${selectedCustomer.name}.`
             : status === 'PENDING_FINANCE_APPROVAL'
             ? `Submitted for Finance approval due to policy exception (${dealEvaluation.riskDiagnosis.whatHappened}).`
+            : status === 'PENDING_APPROVAL'
+            ? `Submitted for Sales Manager sign-off (${dealEvaluation.riskDiagnosis.whatHappened}).`
             : `Submitted and cleared automatically within ${selectedCustomer.tier} margin bounds.`,
         badgeType: intent === 'DRAFT' ? 'default' : status === 'APPROVED' ? 'success' : 'warning',
       } as const,
@@ -259,6 +414,7 @@ export default function NewQuotationPage() {
       owner: 'Marcus Vance',
       priceList,
       deliveryDate,
+      requirementId: requirementId || undefined,
     };
 
     try {
@@ -284,10 +440,10 @@ export default function NewQuotationPage() {
       {/* Top Breadcrumb & Actions Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div className="flex items-center gap-3">
-          <Link href="/quotes">
+          <Link href={requirementId ? `/requirements/${requirementId}` : "/quotes"}>
             <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs text-slate-600">
               <ArrowLeft className="w-3.5 h-3.5" />
-              Back to Quotes
+              {requirementId ? "Back to Requirement" : "Back to Quotes"}
             </Button>
           </Link>
           <div>
@@ -321,6 +477,37 @@ export default function NewQuotationPage() {
           </Button>
         </div>
       </div>
+
+      {/* Origin Requirement Context Banner */}
+      {requirement && (
+        <div className="bg-gradient-to-r from-teal-50 via-blue-50 to-white border border-teal-300 rounded-xl p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-teal-600 text-white flex items-center justify-center shrink-0">
+              <Inbox className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-teal-800">
+                  Converting Inbound Customer Requirement
+                </span>
+                <span className="px-2 py-0.5 text-xs font-mono font-bold bg-white text-teal-900 rounded border border-teal-300">
+                  {requirement.id}
+                </span>
+              </div>
+              <p className="text-xs text-slate-700 mt-0.5">
+                Pre-populated from customer intake: <strong>{requirement.customerName}</strong> — {requirement.title} ({requirement.items.length} items requested).
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/requirements/${requirement.id}`}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-900 hover:underline shrink-0"
+          >
+            <span>View Source Demand</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Form Details & Multi-line Editor */}
@@ -437,12 +624,13 @@ export default function NewQuotationPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50 text-[11px] font-semibold text-slate-600">
-                      <TableHead className="w-56">Product / Service</TableHead>
-                      <TableHead className="w-20 text-center">Qty</TableHead>
-                      <TableHead className="w-28 text-right">Unit Price</TableHead>
-                      <TableHead className="w-44">Discount % & Allowed</TableHead>
-                      <TableHead className="w-32 text-center">Policy Status</TableHead>
-                      <TableHead className="w-28 text-right">Line Net</TableHead>
+                      <TableHead className="w-52">Product / Service</TableHead>
+                      <TableHead className="w-16 text-center">Qty</TableHead>
+                      <TableHead className="w-24 text-right">Unit Price</TableHead>
+                      <TableHead className="w-40">Discount % & Allowed</TableHead>
+                      <TableHead className="w-24 text-center">Margin %</TableHead>
+                      <TableHead className="w-28 text-center">Policy Status</TableHead>
+                      <TableHead className="w-24 text-right">Line Net</TableHead>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -452,6 +640,9 @@ export default function NewQuotationPage() {
                       const selectedProd = products.find((p) => p.id === line.productId);
                       const isViolation = evalLine?.isViolation;
                       const excess = evalLine?.excessPercent || 0;
+                      const cost = getProductCost(selectedProd);
+                      const netUnitPrice = line.unitPrice * (1 - line.discountPercent / 100);
+                      const lineMargin = netUnitPrice > 0 ? Math.round(((netUnitPrice - cost) / netUnitPrice) * 100) : 0;
 
                       return (
                         <TableRow
@@ -531,7 +722,7 @@ export default function NewQuotationPage() {
                                     parseInt(e.target.value) || 0
                                   )
                                 }
-                                className="w-24 accent-teal-600 h-1.5 bg-slate-200 rounded cursor-pointer"
+                                className="w-20 accent-teal-600 h-1.5 bg-slate-200 rounded cursor-pointer"
                               />
                               <div className="flex items-center gap-1">
                                 <Input
@@ -546,22 +737,41 @@ export default function NewQuotationPage() {
                                       parseInt(e.target.value) || 0
                                     )
                                   }
-                                  className="text-xs h-8 w-14 text-right font-mono"
+                                  className="text-xs h-8 w-12 text-right font-mono"
                                 />
                                 <span className="text-xs font-semibold text-slate-500">%</span>
                               </div>
                             </div>
                             <div className="flex items-center justify-between text-[10px] mt-1 font-medium">
                               <span className="text-slate-500">
-                                Allowed Limit: <strong>{evalLine?.effectiveLimit}%</strong>
+                                Cap: <strong>{evalLine?.effectiveLimit}%</strong>
                               </span>
                               {isViolation ? (
                                 <span className="text-rose-700 font-bold">
-                                  +{excess}% over limit
+                                  +{excess}% over
                                 </span>
                               ) : (
                                 <span className="text-emerald-700">Within Policy</span>
                               )}
+                            </div>
+                          </TableCell>
+
+                          {/* Line Margin % */}
+                          <TableCell className="align-top py-3 text-center">
+                            <div className="space-y-0.5">
+                              <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
+                                lineMargin >= 35
+                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                  : lineMargin >= 25
+                                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                  : 'bg-rose-50 text-rose-800 border border-rose-200'
+                              }`}>
+                                <TrendingUp className="w-2.5 h-2.5" />
+                                {lineMargin}%
+                              </span>
+                              <span className="text-[9px] text-slate-400 block font-mono">
+                                Cost: ${cost}
+                              </span>
                             </div>
                           </TableCell>
 
@@ -625,6 +835,96 @@ export default function NewQuotationPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Smart Upsell & Cross-Sell Suggestions */}
+          <Card className="bg-gradient-to-r from-teal-50/40 via-white to-slate-50 border-teal-200 shadow-enterprise">
+            <CardHeader className="p-4 pb-2 border-b border-teal-100 flex flex-row items-center justify-between space-y-0">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-md bg-teal-600 text-white flex items-center justify-center shadow-2xs">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                    Smart Upsell & Cross-Sell Suggestions
+                  </CardTitle>
+                  <p className="text-[11px] text-slate-500">
+                    Attach high-margin peripherals and service SLAs to optimize deal gross margin and recurring MRR.
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-semibold bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full border border-teal-200">
+                AI Deal Desk Advisor
+              </span>
+            </CardHeader>
+            <CardContent className="p-4 space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {UPSELL_SUGGESTIONS.filter((s) => !dismissedUpsells.includes(s.id)).map((rec) => {
+                  const alreadyInQuote = lines.some((l) => l.productId === rec.productId);
+                  const prod = products.find((p) => p.id === rec.productId);
+
+                  return (
+                    <div
+                      key={rec.id}
+                      className={`p-3 rounded-lg border text-xs flex flex-col justify-between transition-all ${
+                        alreadyInQuote
+                          ? 'bg-emerald-50/50 border-emerald-200'
+                          : 'bg-white border-slate-200 hover:border-teal-300 shadow-2xs'
+                      }`}
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-start justify-between gap-1">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
+                            <Tag className="w-2.5 h-2.5" />
+                            {rec.tag}
+                          </span>
+                          {!alreadyInQuote && (
+                            <button
+                              type="button"
+                              onClick={() => handleDismissUpsell(rec.id)}
+                              className="text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
+                              title="Dismiss suggestion"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                        <h4 className="font-bold text-slate-900 leading-snug">{rec.title}</h4>
+                        <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                          {rec.reason}
+                        </p>
+                      </div>
+
+                      <div className="pt-3 mt-2 border-t border-slate-100 flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-slate-900 font-mono text-xs">
+                            {formatCurrency(prod?.basePrice || 0)}
+                          </p>
+                          <span className="text-[10px] font-bold text-emerald-700">
+                            {rec.marginLift}
+                          </span>
+                        </div>
+                        {alreadyInQuote ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100/60 px-2 py-1 rounded">
+                            <CheckCircle2 className="w-3 h-3" /> Attached
+                          </span>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => handleAddUpsell(rec)}
+                            className="bg-teal-700 hover:bg-teal-800 text-white text-[11px] font-semibold h-7 px-2.5 gap-1 shadow-xs cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3" />
+                            Add (+{rec.suggestedQty})
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Right Column: Financial Summary & Governance Risk Radar */}
@@ -677,6 +977,42 @@ export default function NewQuotationPage() {
                     }`}
                     style={{ width: `${dealEvaluation.dealHealthScore}%` }}
                   />
+                </div>
+              </div>
+
+              {/* Deal Gross Margin Preservation Meter */}
+              <div className="pt-3 border-t border-slate-100">
+                <div className="flex justify-between items-center text-xs mb-1">
+                  <span className="font-semibold text-slate-700 flex items-center gap-1">
+                    <TrendingUp className="w-3.5 h-3.5 text-teal-600" />
+                    Deal Gross Margin:
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-slate-900 font-mono">
+                      {dealGrossMargin}%
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      ({formatCurrency(Math.max(0, dealEvaluation.grandTotal - totalCost))} Profit)
+                    </span>
+                  </div>
+                </div>
+                <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-300 ${
+                      dealGrossMargin >= 35
+                        ? 'bg-teal-600'
+                        : dealGrossMargin >= 25
+                        ? 'bg-amber-500'
+                        : 'bg-rose-500'
+                    }`}
+                    style={{ width: `${Math.min(100, dealGrossMargin)}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                  <span>Target: 35% Preservation</span>
+                  <span className={dealGrossMargin >= 35 ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>
+                    {dealGrossMargin >= 35 ? '✓ Target Met' : '⚠️ Below Target'}
+                  </span>
                 </div>
               </div>
             </CardContent>
@@ -745,5 +1081,20 @@ export default function NewQuotationPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function NewQuotationPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-8 space-y-6">
+          <div className="h-8 bg-slate-200 rounded-md animate-pulse w-1/4" />
+          <div className="h-64 bg-slate-100 rounded-xl border border-slate-200 animate-pulse" />
+        </div>
+      }
+    >
+      <NewQuotationForm />
+    </Suspense>
   );
 }

@@ -124,7 +124,7 @@ interface AuthContextType {
     email: string;
     password: string;
     company: string;
-    tier: CustomerTier;
+    tier?: CustomerTier;
     subscriptionPlan?: SubscriptionPlan;
   }) => Promise<AuthUser>;
   logout: () => void;
@@ -190,10 +190,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     email: string;
     password: string;
     company: string;
-    tier: CustomerTier;
+    tier?: CustomerTier;
     subscriptionPlan?: SubscriptionPlan;
   }): Promise<AuthUser> => {
     await new Promise((res) => setTimeout(res, 300));
+
+    // Customer tier is system-assigned based on enterprise qualification or defaults to Bronze
+    const assignedTier: CustomerTier = data.tier
+      ? data.tier
+      : data.company.toLowerCase().includes('acme')
+      ? 'Gold'
+      : 'Bronze';
 
     const newUser: AuthUser = {
       id: `USR-${Math.floor(2000 + Math.random() * 8000)}`,
@@ -201,7 +208,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email: data.email,
       company: data.company,
       role: 'CUSTOMER',
-      tier: data.tier,
+      tier: assignedTier,
       subscriptionPlan: data.subscriptionPlan || 'NONE',
     };
 

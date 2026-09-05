@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dealflowApi } from '@/services/api';
 import {
   Quotation,
+  QuotationLineItem,
   QuotationStatus,
   InvoiceStatus,
   FulfillmentOrder,
@@ -9,8 +10,13 @@ import {
   SubscriptionStatus,
   Product,
   Customer,
+  CustomerTier,
   DiscountPolicyConfig,
   RuleAuditLogEntry,
+  CustomerRequirement,
+  RequirementItem,
+  RequirementPriority,
+  RequirementStatus,
 } from '@/types/dealflow';
 
 export const QUERY_KEYS = {
@@ -27,6 +33,8 @@ export const QUERY_KEYS = {
   SUBSCRIPTION: (id: string) => ['subscriptions', id],
   DISCOUNT_RULES: ['discount-rules'],
   DISCOUNT_AUDIT: ['discount-audit'],
+  REQUIREMENTS: ['requirements'],
+  REQUIREMENT: (id: string) => ['requirements', id],
 };
 
 export function useCustomers() {
@@ -188,6 +196,7 @@ export function useUpdateQuotationStatus() {
         reapprovalReason?: string;
         deliveryDate?: string;
         dealHealthScore?: number;
+        items?: QuotationLineItem[];
       };
     }) => dealflowApi.updateQuotationStatus(id, status, note, actor, meta),
     onSuccess: (updatedQuotation) => {
@@ -205,6 +214,7 @@ export function useSaveQuotation() {
     mutationFn: (quotation: Quotation) => dealflowApi.saveQuotation(quotation),
     onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUOTATIONS });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.REQUIREMENTS });
       queryClient.setQueryData(QUERY_KEYS.QUOTATION(saved.id), saved);
     },
   });
@@ -322,6 +332,61 @@ export function useUpdateDiscountRules() {
       queryClient.setQueryData(QUERY_KEYS.DISCOUNT_RULES, result.config);
       queryClient.setQueryData(QUERY_KEYS.DISCOUNT_AUDIT, result.audits);
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUOTATIONS });
+    },
+  });
+}
+
+export function useRequirements(customerId?: string) {
+  return useQuery({
+    queryKey: customerId ? ['requirements', { customerId }] : QUERY_KEYS.REQUIREMENTS,
+    queryFn: () => dealflowApi.getRequirements(customerId),
+  });
+}
+
+export function useRequirement(id: string) {
+  return useQuery({
+    queryKey: QUERY_KEYS.REQUIREMENT(id),
+    queryFn: () => dealflowApi.getRequirementById(id),
+    enabled: Boolean(id),
+  });
+}
+
+export function useCreateRequirement() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      customerId: string;
+      customerName: string;
+      customerTier: CustomerTier;
+      title: string;
+      description: string;
+      items: RequirementItem[];
+      priority: RequirementPriority;
+      expectedDeliveryDays: number;
+      additionalNotes?: string;
+      assignedSalesExecutive?: string;
+    }) => dealflowApi.createRequirement(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.REQUIREMENTS });
+    },
+  });
+}
+
+export function useUpdateRequirementStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      status,
+      quotationId,
+    }: {
+      id: string;
+      status: RequirementStatus;
+      quotationId?: string;
+    }) => dealflowApi.updateRequirementStatus(id, status, quotationId),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.REQUIREMENTS });
+      queryClient.setQueryData(QUERY_KEYS.REQUIREMENT(updated.id), updated);
     },
   });
 }

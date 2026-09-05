@@ -23,6 +23,8 @@ import {
   Check,
   Ban,
   MessageSquare,
+  Inbox,
+  ExternalLink,
 } from 'lucide-react';
 import { useQuotation, useUpdateQuotationStatus } from '@/hooks/use-dealflow';
 import { useToast } from '@/components/providers/query-provider';
@@ -185,7 +187,17 @@ export default function QuotationDetailPage() {
         </div>
 
         {/* Status & Risk Badges */}
-        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
+          {quotation.requirementId && (
+            <Link
+              href={`/requirements/${quotation.requirementId}`}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 transition-colors"
+            >
+              <Inbox className="w-3.5 h-3.5" />
+              <span>Originated from {quotation.requirementId}</span>
+              <ExternalLink className="w-3 h-3 ml-0.5" />
+            </Link>
+          )}
           <StatusBadge status={quotation.status} />
           <RiskBadge level={quotation.riskDiagnosis.level} />
         </div>

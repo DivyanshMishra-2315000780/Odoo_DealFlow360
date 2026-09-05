@@ -1,7 +1,9 @@
 import {
   Customer,
+  CustomerTier,
   Product,
   Quotation,
+  QuotationLineItem,
   Invoice,
   FulfillmentOrder,
   QuotationStatus,
@@ -13,7 +15,12 @@ import {
   SubscriptionStatus,
   DiscountPolicyConfig,
   RuleAuditLogEntry,
+  CustomerRequirement,
+  RequirementStatus,
+  RequirementItem,
+  RequirementPriority,
 } from '@/types/dealflow';
+import { evaluateQuotationRisk } from '@/lib/discount-engine';
 import {
   SEED_CUSTOMERS,
   SEED_PRODUCTS,
@@ -24,6 +31,7 @@ import {
   SEED_SUBSCRIPTIONS,
   SEED_DISCOUNT_RULES,
   SEED_RULE_AUDIT_LOG,
+  SEED_REQUIREMENTS,
 } from './seed-data';
 
 const STORAGE_KEYS = {
@@ -36,6 +44,7 @@ const STORAGE_KEYS = {
   SUBSCRIPTIONS: 'dealflow360_subscriptions_v1',
   DISCOUNT_RULES: 'dealflow360_discount_rules_v1',
   DISCOUNT_AUDIT: 'dealflow360_discount_audit_v1',
+  REQUIREMENTS: 'dealflow360_requirements_v1',
 };
 
 // In-memory fallback if running on server side
@@ -46,6 +55,7 @@ let memoryInvoices: Invoice[] = [...SEED_INVOICES];
 let memoryFulfillment: FulfillmentOrder[] = [...SEED_FULFILLMENT];
 let memoryWarehouseStock: WarehouseStock[] = [...SEED_WAREHOUSE_STOCK];
 let memorySubscriptions: CommercialSubscription[] = [...SEED_SUBSCRIPTIONS];
+let memoryRequirements: CustomerRequirement[] = [...SEED_REQUIREMENTS];
 let memoryDiscountRules: DiscountPolicyConfig = { ...SEED_DISCOUNT_RULES };
 let memoryRuleAuditLog: RuleAuditLogEntry[] = [...SEED_RULE_AUDIT_LOG];
 
@@ -157,6 +167,12 @@ export const mockStore = {
     } else {
       memoryQuotations = updated;
     }
+
+    // Automatically synchronize originating requirement status
+    if (quotation.requirementId) {
+      this.updateRequirementStatus(quotation.requirementId, 'QUOTATION_CREATED', quotation.id);
+    }
+
     return quotation;
   },
 
@@ -172,6 +188,7 @@ export const mockStore = {
       reapprovalReason?: string;
       deliveryDate?: string;
       dealHealthScore?: number;
+      items?: QuotationLineItem[];
     }
   ): Quotation | null {
     const quotation = this.getQuotationById(id);
@@ -193,6 +210,27 @@ export const mockStore = {
           : 'warning',
     };
 
+    let items = quotation.items;
+    let subtotal = quotation.subtotal;
+    let totalDiscountAmount = quotation.totalDiscountAmount;
+    let grandTotal = quotation.grandTotal;
+    let riskDiagnosis = quotation.riskDiagnosis;
+    let dealHealthScore = meta?.dealHealthScore !== undefined
+      ? meta.dealHealthScore
+      : quotation.dealHealthScore;
+
+    if (meta?.items && meta.items.length > 0) {
+      items = meta.items;
+      const riskEval = evaluateQuotationRisk(items, quotation.customerTier);
+      subtotal = riskEval.subtotal;
+      totalDiscountAmount = riskEval.totalDiscountAmount;
+      grandTotal = riskEval.grandTotal;
+      riskDiagnosis = riskEval.riskDiagnosis;
+      if (meta?.dealHealthScore === undefined) {
+        dealHealthScore = riskEval.dealHealthScore;
+      }
+    }
+
     let salesManagerApproved = meta?.salesManagerApproved !== undefined
       ? meta.salesManagerApproved
       : quotation.salesManagerApproved;
@@ -209,10 +247,6 @@ export const mockStore = {
       ? meta.reapprovalReason
       : quotation.reapprovalReason;
 
-    let dealHealthScore = meta?.dealHealthScore !== undefined
-      ? meta.dealHealthScore
-      : quotation.dealHealthScore;
-
     if (newStatus === 'APPROVED') {
       salesManagerApproved = true;
       financeApproved = true;
@@ -223,11 +257,109 @@ export const mockStore = {
       reapprovalRequired = false;
       reapprovalReason = undefined;
       dealHealthScore = 98;
+
+      // Auto-ensure linked Fulfillment Order exists
+      const existingFulfillment = this.getFulfillmentOrders().find((f) => f.quotationId === quotation.id);
+      if (!existingFulfillment) {
+        const hardwareItems = items.filter((i) => i.category === 'Hardware');
+        const totalQty = hardwareItems.reduce((sum, i) => sum + i.quantity, 0) || items.reduce((sum, i) => sum + i.quantity, 0) || 1;
+        const mainWhQty = Math.max(1, Math.floor(totalQty * 0.75));
+        const secondaryQty = totalQty - mainWhQty;
+
+        const newFulfillment: FulfillmentOrder = {
+          id: `FUL-${Math.floor(800 + Math.random() * 100)}`,
+          quotationId: quotation.id,
+          customerName: quotation.customerName,
+          customerId: quotation.customerId,
+          productId: hardwareItems[0]?.productId || items[0]?.productId || 'PROD-101',
+          productName: hardwareItems[0]?.productName || items[0]?.productName || 'Enterprise Hardware Bundle',
+          orderedQuantity: totalQty,
+          reservedQuantity: totalQty,
+          availableQuantity: totalQty + 4,
+          primaryWarehouse: 'Multi-Facility Split (Auto-Staged)',
+          status: 'PREPARING',
+          hasBackorder: secondaryQty > 0 && totalQty > 20,
+          backorderQuantity: secondaryQty > 0 && totalQty > 20 ? secondaryQty : 0,
+          suggestedAction: 'Consolidate remaining backorder from secondary depot buffer',
+          allocations: [
+            {
+              warehouseId: 'WH-01',
+              warehouseName: 'Main Warehouse',
+              units: mainWhQty,
+              shipmentNumber: 1,
+              carrier: 'FedEx Priority Overnight',
+              trackingNumber: `1Z-CHI-${Math.floor(100000 + Math.random() * 900000)}`,
+              status: 'SCHEDULED',
+            },
+            ...(secondaryQty > 0
+              ? [
+                  {
+                    warehouseId: 'WH-02',
+                    warehouseName: 'East Depot',
+                    units: secondaryQty,
+                    shipmentNumber: 2,
+                    carrier: 'UPS Express Freight',
+                    trackingNumber: `1Z-NWK-${Math.floor(100000 + Math.random() * 900000)}`,
+                    status: 'SCHEDULED' as const,
+                  },
+                ]
+              : []),
+          ],
+          estimatedDelivery: quotation.deliveryDate || new Date(Date.now() + 10 * 86400000).toISOString().split('T')[0],
+          notes: 'Auto-staged upon customer contract confirmation.',
+        };
+        this.updateFulfillmentOrder(newFulfillment);
+      }
+
+      // Auto-ensure linked Invoice exists
+      const existingInvoice = this.getInvoices().find((inv) => inv.quotationId === quotation.id);
+      if (!existingInvoice) {
+        const newInvoice: Invoice = {
+          id: `INV-${Math.floor(1040 + Math.random() * 100)}`,
+          quotationId: quotation.id,
+          customerName: quotation.customerName,
+          customerId: quotation.customerId,
+          customerTier: quotation.customerTier,
+          amount: grandTotal,
+          subtotal,
+          taxAmount: 0,
+          paidAmount: 0,
+          remainingAmount: grandTotal,
+          issueDate: new Date().toISOString().split('T')[0],
+          dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+          status: 'UNPAID',
+          paymentStatus: 'UNPAID',
+          lifecycleStage: 'ORDER_CONFIRMED',
+          isShipped: false,
+          shipmentStatus: 'NOT_SHIPPED',
+          isPartialDelivery: false,
+          items: items.map((it, idx) => ({
+            id: `ITEM-${idx + 1}`,
+            description: `${it.productName} (${it.quantity} Units, ${it.discountPercent}% Concession)`,
+            chargeType: 'ONE_TIME',
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+            total: it.lineTotal,
+            isDelivered: false,
+          })),
+        };
+        const allInvoices = this.getInvoices();
+        if (isBrowser()) {
+          saveToStorage(STORAGE_KEYS.INVOICES, [newInvoice, ...allInvoices]);
+        } else {
+          memoryInvoices = [newInvoice, ...allInvoices];
+        }
+      }
     }
 
     const updatedQuotation: Quotation = {
       ...quotation,
       status: newStatus,
+      items,
+      subtotal,
+      totalDiscountAmount,
+      grandTotal,
+      riskDiagnosis,
       salesManagerApproved,
       financeApproved,
       reapprovalRequired,
@@ -605,6 +737,95 @@ export const mockStore = {
     return { config: updatedConfig, audits: updatedAudits };
   },
 
+  // Customer Requirements
+  getRequirements(customerId?: string): CustomerRequirement[] {
+    const all = isBrowser()
+      ? loadFromStorage<CustomerRequirement[]>(STORAGE_KEYS.REQUIREMENTS, SEED_REQUIREMENTS)
+      : memoryRequirements;
+
+    if (!customerId) return all;
+    return all.filter(
+      (r) =>
+        r.customerId === customerId ||
+        r.customerName.toLowerCase().includes(customerId.toLowerCase())
+    );
+  },
+
+  getRequirementById(id: string): CustomerRequirement | undefined {
+    return this.getRequirements().find((r) => r.id === id);
+  },
+
+  saveRequirement(req: CustomerRequirement): CustomerRequirement {
+    const all = this.getRequirements();
+    const idx = all.findIndex((r) => r.id === req.id);
+    let updated: CustomerRequirement[];
+    if (idx >= 0) {
+      updated = [...all];
+      updated[idx] = {
+        ...req,
+        updatedAt: new Date().toISOString(),
+      };
+    } else {
+      updated = [req, ...all];
+    }
+    if (isBrowser()) {
+      saveToStorage(STORAGE_KEYS.REQUIREMENTS, updated);
+    } else {
+      memoryRequirements = updated;
+    }
+    return req;
+  },
+
+  createRequirement(payload: {
+    customerId: string;
+    customerName: string;
+    customerTier: CustomerTier;
+    title: string;
+    description: string;
+    items: RequirementItem[];
+    priority: RequirementPriority;
+    expectedDeliveryDays: number;
+    additionalNotes?: string;
+    assignedSalesExecutive?: string;
+  }): CustomerRequirement {
+    const all = this.getRequirements();
+    const newId = `REQ-${String(all.length + 1).padStart(3, '0')}`;
+    const now = new Date().toISOString();
+    const newReq: CustomerRequirement = {
+      id: newId,
+      customerId: payload.customerId,
+      customerName: payload.customerName,
+      customerTier: payload.customerTier,
+      title: payload.title,
+      description: payload.description,
+      items: payload.items,
+      priority: payload.priority,
+      expectedDeliveryDays: payload.expectedDeliveryDays,
+      additionalNotes: payload.additionalNotes,
+      status: 'NEW',
+      assignedSalesExecutive: payload.assignedSalesExecutive || 'Marcus Vance',
+      createdAt: now,
+      updatedAt: now,
+    };
+    return this.saveRequirement(newReq);
+  },
+
+  updateRequirementStatus(
+    id: string,
+    status: RequirementStatus,
+    quotationId?: string
+  ): CustomerRequirement | null {
+    const req = this.getRequirementById(id);
+    if (!req) return null;
+    const updated: CustomerRequirement = {
+      ...req,
+      status,
+      quotationId: quotationId !== undefined ? quotationId : req.quotationId,
+      updatedAt: new Date().toISOString(),
+    };
+    return this.saveRequirement(updated);
+  },
+
   resetToDefaults(): void {
     if (isBrowser()) {
       window.localStorage.removeItem(STORAGE_KEYS.QUOTATIONS);
@@ -616,6 +837,7 @@ export const mockStore = {
       window.localStorage.removeItem(STORAGE_KEYS.SUBSCRIPTIONS);
       window.localStorage.removeItem(STORAGE_KEYS.DISCOUNT_RULES);
       window.localStorage.removeItem(STORAGE_KEYS.DISCOUNT_AUDIT);
+      window.localStorage.removeItem(STORAGE_KEYS.REQUIREMENTS);
     }
     memoryQuotations = [...SEED_QUOTATIONS];
     memoryCustomers = [...SEED_CUSTOMERS];
@@ -624,6 +846,7 @@ export const mockStore = {
     memoryFulfillment = [...SEED_FULFILLMENT];
     memoryWarehouseStock = [...SEED_WAREHOUSE_STOCK];
     memorySubscriptions = [...SEED_SUBSCRIPTIONS];
+    memoryRequirements = [...SEED_REQUIREMENTS];
     memoryDiscountRules = { ...SEED_DISCOUNT_RULES };
     memoryRuleAuditLog = [...SEED_RULE_AUDIT_LOG];
   },

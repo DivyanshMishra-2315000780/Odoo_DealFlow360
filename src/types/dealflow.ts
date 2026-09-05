@@ -161,8 +161,38 @@ export interface AuditEntry {
   badgeType?: 'default' | 'warning' | 'success' | 'destructive';
 }
 
+export type RequirementStatus = 'NEW' | 'IN_REVIEW' | 'QUOTATION_CREATED' | 'CLOSED';
+export type RequirementPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+
+export interface RequirementItem {
+  id: string;
+  name: string;
+  quantity: number;
+  category?: ProductCategory;
+  notes?: string;
+}
+
+export interface CustomerRequirement {
+  id: string; // e.g. "REQ-001"
+  customerId: string;
+  customerName: string;
+  customerTier: CustomerTier;
+  title: string;
+  description: string;
+  items: RequirementItem[];
+  priority: RequirementPriority;
+  expectedDeliveryDays: number;
+  additionalNotes?: string;
+  status: RequirementStatus;
+  assignedSalesExecutive: string;
+  quotationId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Quotation {
   id: string; // e.g. "Q-1042"
+  requirementId?: string; // Originating requirement link
   customerId: string;
   customerName: string;
   customerTier: CustomerTier;

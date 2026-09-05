@@ -108,7 +108,6 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan>('NONE');
-  const [selectedTier, setSelectedTier] = useState<CustomerTier>('Gold');
 
   const {
     register,
@@ -132,28 +131,28 @@ export default function SignupPage() {
     setValue('company', 'Acme Corporation');
     setValue('password', 'acme123');
     setValue('confirmPassword', 'acme123');
-    setSelectedTier('Gold');
     toast({
       title: 'Demo Data Prefilled',
-      description: 'Acme Corporation credentials and Gold Tier configured.',
+      description: 'Acme Corporation credentials filled (System will qualify as Gold Tier).',
       type: 'info',
     });
   };
 
   const onSubmit = async (values: SignupFormValues) => {
     try {
+      const isAcme = values.company.toLowerCase().includes('acme');
       const user = await signup({
         fullName: values.fullName,
         email: values.email,
         company: values.company,
         password: values.password,
-        tier: selectedTier,
+        tier: isAcme ? 'Gold' : 'Bronze',
         subscriptionPlan: selectedPlan,
       });
 
       toast({
         title: 'Account Registered',
-        description: `Welcome to DealFlow360, ${user.name}. ${user.company} enrolled in ${user.tier} Tier.`,
+        description: `Welcome to DealFlow360, ${user.name}. ${user.company} initialized under ${user.tier} Tier governance.`,
         type: 'success',
       });
 
@@ -356,14 +355,14 @@ export default function SignupPage() {
                 <div>
                   <CardTitle className="text-sm uppercase tracking-wider flex items-center gap-2 text-slate-800">
                     <Award className="w-4 h-4 text-teal-600" />
-                    2. Commercial Tier Governance
+                    2. System-Assigned Commercial Tier Qualification
                   </CardTitle>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Customer Tiers govern commercial discount caps. Select or verify your enterprise qualification tier.
+                    Customer Tiers govern maximum discount ceilings and are evaluated automatically by the DealFlow360 qualification matrix.
                   </p>
                 </div>
                 <span className="text-xs font-semibold font-mono bg-teal-50 text-teal-700 px-2 py-0.5 rounded border border-teal-200">
-                  Current: {selectedTier} Tier
+                  System Automated
                 </span>
               </div>
             </CardHeader>
@@ -372,25 +371,18 @@ export default function SignupPage() {
                 <Info className="w-4 h-4 text-teal-700 shrink-0 mt-0.5" />
                 <div className="leading-relaxed space-y-1">
                   <p>
-                    <strong>Enterprise Tier Qualification:</strong> Acme Corporation qualifies for <strong>Gold Tier (15% hardware ceiling)</strong> based on historical volume and credit rating.
+                    <strong>Automatic Tier Assignment:</strong> New client organizations initialize at <strong>Bronze Tier (5% cap)</strong>. Verified accounts with spend history (such as Acme Corporation) are automatically recognized as <strong>Gold Tier (15% hardware cap)</strong>.
                   </p>
-                  <p className="text-[11px] text-teal-900">
-                    Reminder: Customer Gold Tier never bypasses approval rules for services exceptions (capped at 10%).
+                  <p className="text-[11px] text-teal-900 font-medium">
+                    ⚠️ Mandatory Governance: Customer Gold Tier never bypasses approval rules. Services are strictly capped at 10% regardless of tier.
                   </p>
                 </div>
               </div>
 
-              {/* Tier Qualification Matrix Grid - Selectable */}
+              {/* Tier Qualification Matrix Grid - Informational */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
                 {/* Bronze Card */}
-                <div
-                  onClick={() => setSelectedTier('Bronze')}
-                  className={`p-4 rounded-lg border-2 text-left relative cursor-pointer transition-all ${
-                    selectedTier === 'Bronze'
-                      ? 'border-teal-600 bg-teal-50/40 shadow-enterprise ring-2 ring-teal-500/20'
-                      : 'border-slate-200 bg-white hover:border-slate-300'
-                  }`}
-                >
+                <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/50 text-left relative">
                   <div className="flex items-center justify-between">
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-900 border border-orange-200">
                       <Shield className="w-3.5 h-3.5 text-orange-600" />
@@ -401,22 +393,15 @@ export default function SignupPage() {
                     </span>
                   </div>
                   <p className="text-xs text-slate-600 mt-2.5 leading-relaxed">
-                    Introductory tier for new accounts without prior enterprise spend history.
+                    Default introductory tier for new registrations without prior historical enterprise spend.
                   </p>
-                  <div className="mt-3 text-[10px] text-slate-700 font-semibold flex items-center gap-1">
-                    {selectedTier === 'Bronze' ? '✓ Selected Tier' : 'Click to Select'}
+                  <div className="mt-3 text-[11px] text-slate-500 font-mono">
+                    Criteria: Standard Onboarding
                   </div>
                 </div>
 
                 {/* Silver Card */}
-                <div
-                  onClick={() => setSelectedTier('Silver')}
-                  className={`p-4 rounded-lg border-2 text-left relative cursor-pointer transition-all ${
-                    selectedTier === 'Silver'
-                      ? 'border-teal-600 bg-teal-50/40 shadow-enterprise ring-2 ring-teal-500/20'
-                      : 'border-slate-200 bg-white hover:border-slate-300'
-                  }`}
-                >
+                <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/50 text-left relative">
                   <div className="flex items-center justify-between">
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-200 text-slate-800">
                       <Award className="w-3.5 h-3.5 text-slate-600" />
@@ -427,36 +412,29 @@ export default function SignupPage() {
                     </span>
                   </div>
                   <p className="text-xs text-slate-600 mt-2.5 leading-relaxed">
-                    Unlocked for mid-market accounts with $100k+ annual volume.
+                    Unlocked for mid-market accounts with $100k+ annual volume and credit score of A or above.
                   </p>
-                  <div className="mt-3 text-[10px] text-slate-700 font-semibold flex items-center gap-1">
-                    {selectedTier === 'Silver' ? '✓ Selected Tier' : 'Click to Select'}
+                  <div className="mt-3 text-[11px] text-slate-500 font-mono">
+                    Criteria: $100k+ spend & A credit
                   </div>
                 </div>
 
                 {/* Gold Card */}
-                <div
-                  onClick={() => setSelectedTier('Gold')}
-                  className={`p-4 rounded-lg border-2 text-left relative cursor-pointer transition-all ${
-                    selectedTier === 'Gold'
-                      ? 'border-amber-500 bg-amber-50/40 shadow-enterprise ring-2 ring-amber-500/20'
-                      : 'border-slate-200 bg-white hover:border-slate-300'
-                  }`}
-                >
+                <div className="p-4 rounded-lg border border-amber-200 bg-amber-50/30 text-left relative">
                   <div className="flex items-center justify-between">
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-900 border border-amber-300">
                       <Crown className="w-3.5 h-3.5 text-amber-600" />
-                      Gold Tier (Acme)
+                      Gold Tier
                     </span>
                     <span className="font-mono text-xs font-semibold text-amber-900">
                       15% Max Cap
                     </span>
                   </div>
                   <p className="text-xs text-slate-600 mt-2.5 leading-relaxed">
-                    Highest priority enterprise tier. 15% hardware ceiling; 10% services ceiling.
+                    Premier tier for accounts with $300k+ volume (e.g. Acme Corp). 15% hardware ceiling, 10% services ceiling.
                   </p>
-                  <div className="mt-3 text-[10px] text-amber-900 font-bold flex items-center gap-1">
-                    {selectedTier === 'Gold' ? '✓ Selected (Acme Corporation)' : 'Click to Select'}
+                  <div className="mt-3 text-[11px] text-amber-900 font-mono font-medium">
+                    Criteria: $300k+ spend & AAA credit
                   </div>
                 </div>
               </div>

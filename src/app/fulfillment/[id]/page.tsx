@@ -123,6 +123,58 @@ export default function FulfillmentDetailPage() {
     }
   };
 
+  // Handle Consolidate Remaining Backorder
+  const handleConsolidateBackorder = async () => {
+    if (!order) return;
+    setIsProcessing(true);
+    try {
+      const updatedAllocations: WarehouseAllocation[] = [
+        {
+          warehouseId: 'WH-01',
+          warehouseName: 'Main Warehouse',
+          units: 18,
+          shipmentNumber: 1,
+          status: 'SCHEDULED',
+          carrier: 'FedEx Priority Overnight',
+        },
+        {
+          warehouseId: 'WH-02',
+          warehouseName: 'East Depot (Buffer Clearance)',
+          units: order.orderedQuantity - 18 > 0 ? order.orderedQuantity - 18 : 6,
+          shipmentNumber: 2,
+          status: 'SCHEDULED',
+          carrier: 'UPS Express Freight',
+        },
+      ];
+
+      const consolidatedOrder: FulfillmentOrder = {
+        ...order,
+        reservedQuantity: order.orderedQuantity,
+        availableQuantity: order.orderedQuantity,
+        hasBackorder: false,
+        backorderQuantity: 0,
+        suggestedAction: 'Backorder resolved: All units allocated across Main Warehouse and East Depot buffer.',
+        allocations: updatedAllocations,
+        notes: `${order.notes || ''} [Consolidated]: Buffer stock allocated to clear backorder. All units staged for shipment.`.trim(),
+      };
+
+      await updateMutation.mutateAsync(consolidatedOrder);
+      toast({
+        title: 'Backorder Consolidated',
+        description: `Buffer stock successfully allocated. All ${order.orderedQuantity} units are now staged for shipment.`,
+        type: 'success',
+      });
+    } catch {
+      toast({
+        title: 'Consolidation Failed',
+        description: 'Unable to commit buffer stock allocation.',
+        type: 'error',
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   // Handle Manual Override
   const handleSaveOverride = async () => {
     if (!order) return;
@@ -319,13 +371,24 @@ export default function FulfillmentDetailPage() {
               <p className="text-rose-800 leading-relaxed">
                 Total ordered quantity ({order.orderedQuantity}) exceeds immediate available warehouse capacity ({order.availableQuantity} units available).
               </p>
-              <div className="p-2.5 rounded bg-rose-100/70 border border-rose-200 text-rose-950 flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-rose-700" />
-                  <span className="font-semibold">Suggested Fulfillment Action:</span>
-                  <span className="font-bold underline">{order.suggestedAction || 'Consolidate remaining backorder after restock'}</span>
+              <div className="p-2.5 rounded bg-rose-100/70 border border-rose-200 text-rose-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-rose-700 shrink-0" />
+                  <div>
+                    <span className="font-semibold">Suggested Action: </span>
+                    <span className="font-medium">{order.suggestedAction || 'Consolidate remaining backorder after restock'}</span>
+                    <span className="ml-2 text-[11px] text-rose-800 font-mono">(Replenishment ETA: 2026-09-24)</span>
+                  </div>
                 </div>
-                <span className="text-[11px] text-rose-800 font-mono">Replenishment ETA: 2026-09-24</span>
+                <Button
+                  size="sm"
+                  onClick={handleConsolidateBackorder}
+                  disabled={isProcessing}
+                  className="bg-rose-700 hover:bg-rose-800 text-white text-xs font-semibold h-7 px-3 gap-1.5 shadow-xs shrink-0 cursor-pointer"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Consolidate Remaining Backorder
+                </Button>
               </div>
             </div>
           </div>

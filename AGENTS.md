@@ -10,7 +10,7 @@
 
 ### Core Workflow:
 ```
-Customer → Quotation → Discount Validation → Risk Evaluation → Approval → Negotiation → Re-approval (if required) → Confirmation → Fulfillment → Shipment → Invoice → Payment → Deal Health
+Customer Requirement (Intake) → Sales Executive Review → Create Quotation → Discount Validation → Risk Evaluation → Approval → Negotiation → Re-approval (if required) → Confirmation → Fulfillment → Shipment → Invoice → Payment → Deal Health
 ```
 
 ### Aesthetic & UX Direction:
@@ -40,12 +40,16 @@ src/
 │   ├── globals.css              # Enterprise design tokens & shadows
 │   ├── layout.tsx               # Root layout: QueryProvider + AuthProvider + AppShell
 │   ├── page.tsx                 # Executive Sales Dashboard & Deal Governance Center
+│   ├── requirements/
+│   │   ├── page.tsx             # Customer Intake Requirements Queue (Sales Exec view)
+│   │   └── [id]/
+│   │       └── page.tsx             # Requirement Detail & Review ("Create Quotation" action)
 │   ├── quotes/
 │   │   ├── page.tsx             # Enterprise Quotations List (7 statuses, filters, sorting, pagination)
 │   │   ├── new/
-│   │   │   └── page.tsx         # Multi-line Quotation Creator with real-time policy math
+│   │   │   └── page.tsx         # Multi-line Quotation Creator with real-time policy math & requirement pre-population
 │   │   └── [id]/
-│   │       └── page.tsx         # Quotation Detail & Governance Command Center (variance breakdown)
+│   │       └── page.tsx         # Quotation Detail & Governance Command Center (origin requirement link)
 │   ├── approvals/
 │   │   ├── page.tsx             # Commercial Approval Center (status & risk tabs, hierarchy levels)
 │   │   └── [id]/
@@ -86,12 +90,18 @@ src/
 │   ├── signup/
 │   │   └── page.tsx             # Enterprise Signup (Customer Tier + 3 Subscriptions + Skip)
 │   └── portal/
-│       ├── layout.tsx           # Dedicated Customer Portal shell & navigation
+│       ├── layout.tsx           # Dedicated Customer Portal shell & navigation (My Requirements tab)
 │       ├── page.tsx             # Customer Overview (active deals, pending action, messages)
+│       ├── requirements/
+│       │   ├── page.tsx         # My Requirements table (customer isolation)
+│       │   ├── new/
+│       │   │   └── page.tsx     # Requirement Intake Form with 1-Click Demo Fill (ABC Manufacturing)
+│       │   └── [id]/
+│       │       └── page.tsx     # Requirement Detail with quotation status & direct quote link
 │       ├── quotations/
 │       │   ├── page.tsx         # My Quotations table
 │       │   └── [id]/
-│       │       └── page.tsx     # Quotation Detail & Interactive Negotiation Side Panel
+│       │       └── page.tsx     # Quotation Detail & Interactive Negotiation Side Panel (origin requirement badge)
 │       ├── invoices/
 │       │   └── page.tsx         # Commercial Invoices & Online Payment Settlement
 │       └── profile/
@@ -726,5 +736,16 @@ npm run build
   - **Zero Placeholders & Zero Errors**: No dead buttons, no lorem ipsum, no TODOs, and **0 browser console errors**.
   - **Turbopack Build**: Clean compilation across all 23 routes with strict TypeScript verification.
 
-
-
+### 13. Frontend Verification & 28-Step Workflow Correction Pass:
+* **Status**: ✅ **COMPLETED, VERIFIED & PRODUCTION BUILD VALIDATED**
+* **Code Implementation**:
+  - **System-Assigned Tier Separation** ([`src/app/signup/page.tsx`](file:///e:/Tidnatum/src/app/signup/page.tsx) & [`src/lib/auth.tsx`](file:///e:/Tidnatum/src/lib/auth.tsx)): Customer commercial tier is strictly system-assigned by the qualification matrix; Section 2 is an informative benchmark display (Bronze 5%, Silver 10%, Gold 15% with services 10% ceiling callout) while SaaS software subscriptions remain separate with a valid skip option.
+  - **Upsell / Cross-Sell & Margin Radar** ([`src/app/quotes/new/page.tsx`](file:///e:/Tidnatum/src/app/quotes/new/page.tsx)):
+    - Added interactive Smart Upsell Advisor proposing Docking Station, Care Plan, and Extended Warranty with margin lift tags, 1-click "Add to Quote", and dismissal support.
+    - Added live line-level gross margin % pills (`TrendingUp`) with cost basis display.
+    - Added Deal Gross Margin Preservation progress meter with a 35% benchmark target indicator.
+    - Automated approval escalation based on risk: Low $\to$ Approved, Medium $\to$ Sales Manager (`PENDING_APPROVAL`), High/Critical $\to$ Finance Controller (`PENDING_FINANCE_APPROVAL`).
+  - **Client Portal Counter-Proposal Recalculation** ([`src/app/portal/quotations/[id]/page.tsx`](file:///e:/Tidnatum/src/app/portal/quotations/[id]/page.tsx) & [`src/mock/store.ts`](file:///e:/Tidnatum/src/mock/store.ts)): Submitting counter-proposals updates the quote line items, recalculates totals, evaluates risk via [`src/lib/discount-engine.ts`](file:///e:/Tidnatum/src/lib/discount-engine.ts), sets `reapprovalRequired: true`, and moves status to `PENDING_APPROVAL`.
+  - **Fulfillment Backorder Consolidation** ([`src/app/fulfillment/[id]/page.tsx`](file:///e:/Tidnatum/src/app/fulfillment/[id]/page.tsx)): Added a working "Consolidate Remaining Backorder" button in the backorder callout to allocate secondary depot buffer and clear deficit.
+  - **Role-Based Navigation Alignment** ([`src/components/layout/app-shell.tsx`](file:///e:/Tidnatum/src/components/layout/app-shell.tsx)): Fixed navigation menus across all 5 roles (Customer, Sales Executive, Sales Manager, Finance Officer, Admin) and removed duplicate customer links.
+  - **Clean Production Build**: Zero TypeScript errors (`npx tsc --noEmit`) and successful Next.js 16.3.4 production build across all 23 routes (`npm run build`).

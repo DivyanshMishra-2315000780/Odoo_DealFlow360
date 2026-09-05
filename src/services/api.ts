@@ -1,7 +1,9 @@
 import {
   Customer,
+  CustomerTier,
   Product,
   Quotation,
+  QuotationLineItem,
   Invoice,
   FulfillmentOrder,
   QuotationStatus,
@@ -11,6 +13,10 @@ import {
   SubscriptionStatus,
   DiscountPolicyConfig,
   RuleAuditLogEntry,
+  CustomerRequirement,
+  RequirementItem,
+  RequirementPriority,
+  RequirementStatus,
 } from '@/types/dealflow';
 import { mockStore } from '@/mock/store';
 
@@ -83,6 +89,7 @@ export const dealflowApi = {
       reapprovalReason?: string;
       deliveryDate?: string;
       dealHealthScore?: number;
+      items?: QuotationLineItem[];
     }
   ): Promise<Quotation> {
     const updated = mockStore.updateQuotationStatus(id, status, note, actor, meta);
@@ -200,6 +207,43 @@ export const dealflowApi = {
   ): Promise<{ config: DiscountPolicyConfig; audits: RuleAuditLogEntry[] }> {
     const result = mockStore.updateDiscountRules(config, changedBy, reason);
     return simulateDelay(result, 200);
+  },
+
+  // Customer Requirements
+  async getRequirements(customerId?: string): Promise<CustomerRequirement[]> {
+    return simulateDelay(mockStore.getRequirements(customerId));
+  },
+
+  async getRequirementById(id: string): Promise<CustomerRequirement | null> {
+    const req = mockStore.getRequirementById(id);
+    return simulateDelay(req || null);
+  },
+
+  async createRequirement(payload: {
+    customerId: string;
+    customerName: string;
+    customerTier: CustomerTier;
+    title: string;
+    description: string;
+    items: RequirementItem[];
+    priority: RequirementPriority;
+    expectedDeliveryDays: number;
+    additionalNotes?: string;
+    assignedSalesExecutive?: string;
+  }): Promise<CustomerRequirement> {
+    return simulateDelay(mockStore.createRequirement(payload), 250);
+  },
+
+  async updateRequirementStatus(
+    id: string,
+    status: RequirementStatus,
+    quotationId?: string
+  ): Promise<CustomerRequirement> {
+    const updated = mockStore.updateRequirementStatus(id, status, quotationId);
+    if (!updated) {
+      throw new Error(`Requirement ${id} not found`);
+    }
+    return simulateDelay(updated, 200);
   },
 
   // System Utility
