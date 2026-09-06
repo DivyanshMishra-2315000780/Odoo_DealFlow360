@@ -85,6 +85,12 @@ export default function SalesDashboardPage() {
   // Dialog states
   const [isNewQuotationOpen, setIsNewQuotationOpen] = useState(false);
   const [inspectQuotation, setInspectQuotation] = useState<Quotation | null>(null);
+  const [actionCategoryModal, setActionCategoryModal] = useState<{
+    title: string;
+    subtitle: string;
+    badgeColor: 'amber' | 'rose' | 'blue' | 'teal';
+    items: Quotation[];
+  } | null>(null);
 
   // Filter controls
   const [selectedPeriod, setSelectedPeriod] = useState('Q3-2026');
@@ -102,7 +108,7 @@ export default function SalesDashboardPage() {
   );
   const openQuotations = filteredQuotations.filter((q) => q.status !== 'REJECTED');
   const atRiskDeals = filteredQuotations.filter(
-    (q) => q.riskDiagnosis.level === 'HIGH' || q.riskDiagnosis.level === 'CRITICAL'
+    (q) => q.riskDiagnosis.level === 'HIGH' || q.riskDiagnosis.level === 'CRITICAL' || q.items.some((item) => item.isViolation)
   );
   const totalPipelineRevenue = openQuotations.reduce((acc, q) => acc + q.grandTotal, 0);
   const avgDealHealth = filteredQuotations.length
@@ -418,109 +424,190 @@ export default function SalesDashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {/* Action Item 1 */}
-          <button
-            type="button"
-            onClick={() => {
-              const pending = quotations.find((q) => q.status === 'PENDING_APPROVAL') || quotations[0];
-              setInspectQuotation(pending);
-            }}
-            className="text-left p-4 rounded-lg border border-amber-200 bg-amber-50/70 hover:bg-amber-100/70 transition shadow-enterprise group cursor-pointer"
-          >
-            <div className="flex items-center justify-between text-amber-900">
-              <span className="text-xs font-bold uppercase tracking-wider">
-                {pendingApprovals.length} Awaiting Approval
-              </span>
-              <ChevronRight className="w-4 h-4 text-amber-700 group-hover:translate-x-0.5 transition" />
-            </div>
-            <p className="text-xs font-semibold text-slate-900 mt-1">
-              Q-1042 (Acme Corporation)
-            </p>
-            <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
-              Onsite Setup service discount exceeds permitted limit.
-            </p>
-            <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-amber-900">
-              Review & Sign-off →
-            </div>
-          </button>
+          {/* Action Card 1: Pending Approvals */}
+          {(() => {
+            const pendingItem = pendingApprovals[0];
+            const refCode = pendingItem ? (pendingItem.id.startsWith('Q-') ? pendingItem.id : `Q-${pendingItem.id.slice(0, 8).toUpperCase()}`) : '';
+            return (
+              <button
+                type="button"
+                onClick={() => {
+                  if (pendingApprovals.length === 0) {
+                    toast({
+                      title: 'No Pending Approvals',
+                      description: 'All active quotations are fully compliant and approved.',
+                      type: 'info',
+                    });
+                  } else if (pendingApprovals.length === 1) {
+                    setInspectQuotation(pendingApprovals[0]);
+                  } else {
+                    setActionCategoryModal({
+                      title: `${pendingApprovals.length} Deals Awaiting Commercial Approval`,
+                      subtitle: 'Select any quotation below to review discount policy exceptions and perform commercial sign-off.',
+                      badgeColor: 'amber',
+                      items: pendingApprovals,
+                    });
+                  }
+                }}
+                className="text-left p-4 rounded-lg border border-amber-200 bg-amber-50/70 hover:bg-amber-100/70 transition shadow-enterprise group cursor-pointer"
+              >
+                <div className="flex items-center justify-between text-amber-900">
+                  <span className="text-xs font-bold uppercase tracking-wider">
+                    {pendingApprovals.length} Awaiting Approval
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-amber-700 group-hover:translate-x-0.5 transition" />
+                </div>
+                <p className="text-xs font-semibold text-slate-900 mt-1 truncate">
+                  {pendingItem ? `${refCode} (${pendingItem.customerName})` : 'All Deals Approved'}
+                </p>
+                <p className="text-[11px] text-slate-600 mt-0.5 leading-snug line-clamp-2">
+                  {pendingItem ? (pendingItem.riskDiagnosis.whatHappened || 'Discount sign-off required for execution.') : 'No pending approval requests requiring review today.'}
+                </p>
+                <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-amber-900">
+                  {pendingApprovals.length > 1 ? `Browse All ${pendingApprovals.length} Deals →` : pendingItem ? 'Review & Sign-off →' : 'View Approval Center →'}
+                </div>
+              </button>
+            );
+          })()}
 
-          {/* Action Item 2 */}
-          <button
-            type="button"
-            onClick={() => {
-              const atRisk = atRiskDeals[0] || quotations[0];
-              setInspectQuotation(atRisk);
-            }}
-            className="text-left p-4 rounded-lg border border-rose-200 bg-rose-50/70 hover:bg-rose-100/70 transition shadow-enterprise group cursor-pointer"
-          >
-            <div className="flex items-center justify-between text-rose-900">
-              <span className="text-xs font-bold uppercase tracking-wider">
-                {atRiskDeals.length} High-Risk Policy Breach
-              </span>
-              <ChevronRight className="w-4 h-4 text-rose-700 group-hover:translate-x-0.5 transition" />
-            </div>
-            <p className="text-xs font-semibold text-slate-900 mt-1">
-              Q-1042 Discount Ceiling Breached
-            </p>
-            <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
-              +8% over category limit. Customer Gold tier cannot bypass rule.
-            </p>
-            <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-rose-800">
-              Inspect Risk Diagnosis →
-            </div>
-          </button>
+          {/* Action Card 2: High-Risk Policy Breach */}
+          {(() => {
+            const atRiskItem = atRiskDeals[0];
+            const refCode = atRiskItem ? (atRiskItem.id.startsWith('Q-') ? atRiskItem.id : `Q-${atRiskItem.id.slice(0, 8).toUpperCase()}`) : '';
+            return (
+              <button
+                type="button"
+                onClick={() => {
+                  if (atRiskDeals.length === 0) {
+                    toast({
+                      title: 'Zero Policy Breaches',
+                      description: 'All current pipeline deals adhere strictly to tier & category caps.',
+                      type: 'info',
+                    });
+                  } else if (atRiskDeals.length === 1) {
+                    setInspectQuotation(atRiskDeals[0]);
+                  } else {
+                    setActionCategoryModal({
+                      title: `${atRiskDeals.length} High-Risk Policy Breaches`,
+                      subtitle: 'Deals exceeding Customer Tier or Product Category discount ceilings.',
+                      badgeColor: 'rose',
+                      items: atRiskDeals,
+                    });
+                  }
+                }}
+                className="text-left p-4 rounded-lg border border-rose-200 bg-rose-50/70 hover:bg-rose-100/70 transition shadow-enterprise group cursor-pointer"
+              >
+                <div className="flex items-center justify-between text-rose-900">
+                  <span className="text-xs font-bold uppercase tracking-wider">
+                    {atRiskDeals.length} High-Risk Policy Breach
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-rose-700 group-hover:translate-x-0.5 transition" />
+                </div>
+                <p className="text-xs font-semibold text-slate-900 mt-1 truncate">
+                  {atRiskItem ? `${refCode} (${atRiskItem.customerName})` : 'Zero Policy Breaches'}
+                </p>
+                <p className="text-[11px] text-slate-600 mt-0.5 leading-snug line-clamp-2">
+                  {atRiskItem ? (atRiskItem.riskDiagnosis.whatHappened || 'Discount ceiling exceeded for policy category.') : 'All deal discounts are within compliant policy limits.'}
+                </p>
+                <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-rose-800">
+                  {atRiskDeals.length > 1 ? `Browse All ${atRiskDeals.length} Breaches →` : atRiskItem ? 'Inspect Risk Diagnosis →' : 'View Risk Radar →'}
+                </div>
+              </button>
+            );
+          })()}
 
-          {/* Action Item 3 */}
-          <button
-            type="button"
-            onClick={() => {
-              const stalled = stalledDeals[0] || quotations[0];
-              setInspectQuotation(stalled);
-            }}
-            className="text-left p-4 rounded-lg border border-blue-200 bg-blue-50/70 hover:bg-blue-100/70 transition shadow-enterprise group cursor-pointer"
-          >
-            <div className="flex items-center justify-between text-blue-900">
-              <span className="text-xs font-bold uppercase tracking-wider">
-                {stalledDeals.length} Stalled Deals
-              </span>
-              <ChevronRight className="w-4 h-4 text-blue-700 group-hover:translate-x-0.5 transition" />
-            </div>
-            <p className="text-xs font-semibold text-slate-900 mt-1">
-              Q-1045 (Zenith Industries)
-            </p>
-            <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
-              Negotiating counter-offer: client requested 2 Care Plan months.
-            </p>
-            <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-blue-900">
-              View Negotiation Terms →
-            </div>
-          </button>
+          {/* Action Card 3: Stalled / Active Negotiations */}
+          {(() => {
+            const stalledItem = stalledDeals[0];
+            const refCode = stalledItem ? (stalledItem.id.startsWith('Q-') ? stalledItem.id : `Q-${stalledItem.id.slice(0, 8).toUpperCase()}`) : '';
+            return (
+              <button
+                type="button"
+                onClick={() => {
+                  if (stalledDeals.length === 0) {
+                    toast({
+                      title: 'No Stalled Deals',
+                      description: 'All deals are actively progressing through pipeline stages.',
+                      type: 'info',
+                    });
+                  } else if (stalledDeals.length === 1) {
+                    setInspectQuotation(stalledDeals[0]);
+                  } else {
+                    setActionCategoryModal({
+                      title: `${stalledDeals.length} Stalled / Active Negotiations`,
+                      subtitle: 'Quotations currently in client negotiation or draft status awaiting response.',
+                      badgeColor: 'blue',
+                      items: stalledDeals,
+                    });
+                  }
+                }}
+                className="text-left p-4 rounded-lg border border-blue-200 bg-blue-50/70 hover:bg-blue-100/70 transition shadow-enterprise group cursor-pointer"
+              >
+                <div className="flex items-center justify-between text-blue-900">
+                  <span className="text-xs font-bold uppercase tracking-wider">
+                    {stalledDeals.length} Stalled / Negotiations
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-blue-700 group-hover:translate-x-0.5 transition" />
+                </div>
+                <p className="text-xs font-semibold text-slate-900 mt-1 truncate">
+                  {stalledItem ? `${refCode} (${stalledItem.customerName})` : 'No Stalled Negotiations'}
+                </p>
+                <p className="text-[11px] text-slate-600 mt-0.5 leading-snug line-clamp-2">
+                  {stalledItem ? (stalledItem.notes || stalledItem.riskDiagnosis.nextAction || 'Negotiating counter-offer terms.') : 'All pipeline deals actively progressing.'}
+                </p>
+                <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-blue-900">
+                  {stalledDeals.length > 1 ? `Browse All ${stalledDeals.length} Deals →` : stalledItem ? 'View Negotiation Terms →' : 'View Active Deals →'}
+                </div>
+              </button>
+            );
+          })()}
 
-          {/* Action Item 4 */}
-          <button
-            type="button"
-            onClick={() => {
-              const confirmed = quotations.find((q) => q.status === 'CONFIRMED') || quotations[0];
-              setInspectQuotation(confirmed);
-            }}
-            className="text-left p-4 rounded-lg border border-teal-200 bg-teal-50/70 hover:bg-teal-100/70 transition shadow-enterprise group cursor-pointer"
-          >
-            <div className="flex items-center justify-between text-teal-900">
-              <span className="text-xs font-bold uppercase tracking-wider">
-                1 Fulfillment In-Transit
-              </span>
-              <ChevronRight className="w-4 h-4 text-teal-700 group-hover:translate-x-0.5 transition" />
-            </div>
-            <p className="text-xs font-semibold text-slate-900 mt-1">
-              Order FUL-801 (Nova Systems)
-            </p>
-            <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
-              Priority shipment via FedEx Freight. Est. delivery Sept 8.
-            </p>
-            <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-teal-900">
-              Track Shipment Status →
-            </div>
-          </button>
+          {/* Action Card 4: Fulfillment In-Transit */}
+          {(() => {
+            const confirmedDeals = filteredQuotations.filter((q) => q.status === 'CONFIRMED' || q.status === 'FULFILLMENT');
+            const firstFulfillment = fulfillment[0];
+            const targetQuote = confirmedDeals[0] || (fulfillment.length > 0 ? filteredQuotations[0] : null);
+            return (
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirmedDeals.length > 1) {
+                    setActionCategoryModal({
+                      title: `${confirmedDeals.length} Confirmed / In-Transit Deals`,
+                      subtitle: 'Contracts confirmed and dispatched for warehouse logistics fulfillment.',
+                      badgeColor: 'teal',
+                      items: confirmedDeals,
+                    });
+                  } else if (targetQuote) {
+                    setInspectQuotation(targetQuote);
+                  } else {
+                    toast({
+                      title: 'Fulfillment Ledger',
+                      description: 'Navigate to Warehouse Fulfillment ledger to view all shipments.',
+                      type: 'info',
+                    });
+                  }
+                }}
+                className="text-left p-4 rounded-lg border border-teal-200 bg-teal-50/70 hover:bg-teal-100/70 transition shadow-enterprise group cursor-pointer"
+              >
+                <div className="flex items-center justify-between text-teal-900">
+                  <span className="text-xs font-bold uppercase tracking-wider">
+                    {fulfillment.length || confirmedDeals.length} Fulfillment In-Transit
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-teal-700 group-hover:translate-x-0.5 transition" />
+                </div>
+                <p className="text-xs font-semibold text-slate-900 mt-1 truncate">
+                  {firstFulfillment ? `Order ${firstFulfillment.id} (${firstFulfillment.customerName})` : targetQuote ? `Confirmed (${targetQuote.customerName})` : 'Warehouse Dispatch Ready'}
+                </p>
+                <p className="text-[11px] text-slate-600 mt-0.5 leading-snug line-clamp-2">
+                  {firstFulfillment ? `Priority shipment via ${firstFulfillment.allocations[0]?.carrier || 'FedEx Freight'}. Est. delivery: ${firstFulfillment.estimatedDelivery || 'In 3 Days'}.` : targetQuote ? `Contract confirmed at ${formatCurrency(targetQuote.grandTotal)}. Ready for dispatch.` : 'No shipments currently in transit.'}
+                </p>
+                <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-teal-900">
+                  {confirmedDeals.length > 1 ? `Browse All ${confirmedDeals.length} Orders →` : 'Track Shipment Status →'}
+                </div>
+              </button>
+            );
+          })()}
         </div>
       </section>
 
@@ -574,29 +661,48 @@ export default function SalesDashboardPage() {
                       No deals in this stage
                     </div>
                   ) : (
-                    stage.items.map((q) => (
-                      <div
-                        key={q.id}
-                        onClick={() => setInspectQuotation(q)}
-                        className="p-3 rounded-md border border-slate-200 bg-white hover:border-teal-400 hover:shadow-enterprise transition cursor-pointer space-y-2"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono font-bold text-xs text-slate-900">
-                            {q.id}
-                          </span>
-                          <TierBadge tier={q.customerTier} size="sm" />
+                    stage.items.map((q) => {
+                      const displayTitle = q.title && !q.title.startsWith('QT-')
+                        ? q.title
+                        : `${q.customerName} Commercial Procurement`;
+                      const refCode = q.id.startsWith('Q-') ? q.id : `Q-${q.id.slice(0, 8).toUpperCase()}`;
+
+                      return (
+                        <div
+                          key={q.id}
+                          onClick={() => setInspectQuotation(q)}
+                          className="p-3.5 rounded-lg border border-slate-200 bg-white hover:border-teal-500 hover:shadow-md transition-all duration-200 cursor-pointer space-y-2.5 group"
+                        >
+                          {/* Top Row: Customer & Tier */}
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-xs text-slate-900 truncate" title={q.customerName}>
+                              {q.customerName}
+                            </span>
+                            <TierBadge tier={q.customerTier} size="sm" />
+                          </div>
+
+                          {/* Middle Row: Deal Title */}
+                          <p className="text-xs font-medium text-slate-700 leading-snug line-clamp-2 group-hover:text-teal-900 transition-colors">
+                            {displayTitle}
+                          </p>
+
+                          {/* Sub-row: Reference Code */}
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-[10px] font-medium text-slate-500 bg-slate-100/80 px-1.5 py-0.5 rounded border border-slate-200/60">
+                              Ref: {refCode}
+                            </span>
+                          </div>
+
+                          {/* Bottom Row: Amount & Risk */}
+                          <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                            <span className="font-mono font-bold text-slate-900">
+                              {formatCurrency(q.grandTotal)}
+                            </span>
+                            <RiskBadge level={q.riskDiagnosis.level} />
+                          </div>
                         </div>
-                        <p className="text-xs font-medium text-slate-800 line-clamp-1">
-                          {q.customerName}
-                        </p>
-                        <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-slate-100">
-                          <span className="font-mono font-bold text-slate-900">
-                            {formatCurrency(q.grandTotal)}
-                          </span>
-                          <RiskBadge level={q.riskDiagnosis.level} />
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -880,6 +986,98 @@ export default function SalesDashboardPage() {
         }}
       />
 
+      {/* Action Category Catalog Selection Modal */}
+      {actionCategoryModal && (
+        <Dialog
+          open={Boolean(actionCategoryModal)}
+          onOpenChange={(open) => {
+            if (!open) setActionCategoryModal(null);
+          }}
+        >
+          <DialogHeader>
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`w-2.5 h-2.5 rounded-full ${
+                actionCategoryModal.badgeColor === 'amber' ? 'bg-amber-500' :
+                actionCategoryModal.badgeColor === 'rose' ? 'bg-rose-500' :
+                actionCategoryModal.badgeColor === 'blue' ? 'bg-blue-500' : 'bg-teal-500'
+              }`} />
+              <span className="font-mono text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Category Catalog ({actionCategoryModal.items.length})
+              </span>
+            </div>
+            <DialogTitle className="text-base font-bold text-slate-900">
+              {actionCategoryModal.title}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              {actionCategoryModal.subtitle}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 max-h-[60vh] overflow-y-auto pr-1">
+            {actionCategoryModal.items.map((q) => {
+              const refCode = q.id.startsWith('Q-') ? q.id : `Q-${q.id.slice(0, 8).toUpperCase()}`;
+              const displayTitle = q.title && !q.title.startsWith('QT-')
+                ? q.title
+                : `${q.customerName} Commercial Procurement`;
+
+              return (
+                <div
+                  key={q.id}
+                  className="p-3.5 rounded-lg border border-slate-200 bg-white hover:border-teal-500 hover:shadow-md transition-all duration-150 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  <div className="space-y-1.5 min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-[11px] font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                        {refCode}
+                      </span>
+                      <span className="font-bold text-xs text-slate-900">{q.customerName}</span>
+                      <TierBadge tier={q.customerTier} size="sm" />
+                      <StatusBadge status={q.status} />
+                      <RiskBadge level={q.riskDiagnosis.level} />
+                    </div>
+
+                    <p className="text-xs font-semibold text-slate-800 line-clamp-1">
+                      {displayTitle}
+                    </p>
+
+                    <p className="text-[11px] text-slate-500 line-clamp-1">
+                      {q.riskDiagnosis.whatHappened || 'Discount Sign-off / Commercial Review Required'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0 sm:self-center pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Grand Total</span>
+                      <span className="font-mono font-bold text-xs text-slate-900">
+                        {formatCurrency(q.grandTotal)}
+                      </span>
+                    </div>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setActionCategoryModal(null);
+                        setInspectQuotation(q);
+                      }}
+                      className="h-8 px-3 text-xs border-teal-200 text-teal-800 hover:bg-teal-50 font-semibold"
+                    >
+                      Inspect Deal →
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setActionCategoryModal(null)}>
+              Close Catalog
+            </Button>
+          </DialogFooter>
+        </Dialog>
+      )}
+
       {/* Inspect Deal Sheet Modal Dialog */}
       {inspectQuotation && (
         <Dialog
@@ -889,13 +1087,19 @@ export default function SalesDashboardPage() {
           }}
         >
           <DialogHeader>
-            <div className="flex items-center gap-2">
-              <span className="font-mono font-bold text-slate-900 text-sm">{inspectQuotation.id}</span>
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <span className="font-mono font-semibold text-[11px] text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
+                Ref: {inspectQuotation.id.startsWith('Q-') ? inspectQuotation.id : `Q-${inspectQuotation.id.slice(0, 8).toUpperCase()}`}
+              </span>
               <StatusBadge status={inspectQuotation.status} />
               <RiskBadge level={inspectQuotation.riskDiagnosis.level} />
             </div>
-            <DialogTitle className="mt-1">{inspectQuotation.title}</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-base font-bold text-slate-900">
+              {inspectQuotation.title && !inspectQuotation.title.startsWith('QT-')
+                ? inspectQuotation.title
+                : `${inspectQuotation.customerName} Enterprise Deal Sheet`}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
               Deal sheet details, tier governance, and pricing composition for {inspectQuotation.customerName}.
             </DialogDescription>
           </DialogHeader>

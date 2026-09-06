@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/dialog';
 import { useDiscountRules, useDiscountAuditLogs, useUpdateDiscountRules } from '@/hooks/use-dealflow';
 import { useToast } from '@/components/providers/query-provider';
+import { useAuth, normalizeRole, getRoleMeta } from '@/lib/auth';
 import { DiscountPolicyConfig } from '@/types/dealflow';
 
 // Zod validation schema for discount rules configuration form
@@ -93,6 +94,10 @@ export default function DiscountRulesSettingsPage() {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [pendingValues, setPendingValues] = useState<DiscountRulesFormValues | null>(null);
   const [auditSearch, setAuditSearch] = useState('');
+  const { user } = useAuth();
+  const currentRole = normalizeRole(user?.role);
+  const roleMeta = getRoleMeta(currentRole);
+  const defaultAuthor = user ? `${user.name} (${roleMeta?.label ?? currentRole})` : 'System Administrator';
 
   // Setup React Hook Form
   const {
@@ -111,7 +116,7 @@ export default function DiscountRulesSettingsPage() {
           hardwareLimit: currentRules.categoryLimits.Hardware,
           servicesLimit: currentRules.categoryLimits.Services,
           highRiskThresholdPoints: currentRules.workflowRules.highRiskThresholdPoints,
-          changedBy: 'Sarah Sterling (Finance Controller)',
+          changedBy: defaultAuthor,
           justificationReason: '',
         }
       : undefined,
@@ -251,10 +256,10 @@ export default function DiscountRulesSettingsPage() {
                 Example 1: Gold + Hardware
               </div>
               <p className="text-slate-600">
-                Gold Tier (15%) on Laptop Pro 14 (Hardware 15%).
+                Gold Tier ({currentRules?.tierLimits.Gold ?? 15}%) on Laptop Pro 14 (Hardware {currentRules?.categoryLimits.Hardware ?? 15}%).
               </p>
               <div className="font-mono font-bold text-emerald-700 pt-1">
-                min(15%, 15%) = 15% Allowed
+                min({currentRules?.tierLimits.Gold ?? 15}%, {currentRules?.categoryLimits.Hardware ?? 15}%) = {Math.min(currentRules?.tierLimits.Gold ?? 15, currentRules?.categoryLimits.Hardware ?? 15)}% Allowed
               </div>
             </div>
 
@@ -264,10 +269,10 @@ export default function DiscountRulesSettingsPage() {
                 Example 2: Gold + Services (Critical!)
               </div>
               <p className="text-slate-600">
-                Gold Tier (15%) on Onsite Setup (Services 10%).
+                Gold Tier ({currentRules?.tierLimits.Gold ?? 15}%) on Onsite Setup (Services {currentRules?.categoryLimits.Services ?? 10}%).
               </p>
               <div className="font-mono font-bold text-amber-800 pt-1">
-                min(15%, 10%) = 10% Allowed
+                min({currentRules?.tierLimits.Gold ?? 15}%, {currentRules?.categoryLimits.Services ?? 10}%) = {Math.min(currentRules?.tierLimits.Gold ?? 15, currentRules?.categoryLimits.Services ?? 10)}% Allowed
               </div>
             </div>
 
@@ -277,10 +282,10 @@ export default function DiscountRulesSettingsPage() {
                 Example 3: Silver + Hardware
               </div>
               <p className="text-slate-600">
-                Silver Tier (10%) on Laptop Pro 14 (Hardware 15%).
+                Silver Tier ({currentRules?.tierLimits.Silver ?? 10}%) on Laptop Pro 14 (Hardware {currentRules?.categoryLimits.Hardware ?? 15}%).
               </p>
               <div className="font-mono font-bold text-blue-800 pt-1">
-                min(10%, 15%) = 10% Allowed
+                min({currentRules?.tierLimits.Silver ?? 10}%, {currentRules?.categoryLimits.Hardware ?? 15}%) = {Math.min(currentRules?.tierLimits.Silver ?? 10, currentRules?.categoryLimits.Hardware ?? 15)}% Allowed
               </div>
             </div>
           </div>
@@ -293,7 +298,7 @@ export default function DiscountRulesSettingsPage() {
                 Mandatory Governance Rule: Customer Tier Never Bypasses Approval Rules
               </strong>
               <span>
-                Gold customer priority communicates enterprise strategic standing, but category discount ceilings take strict precedence. If a Gold client requests 18% on a Service item (10% ceiling), it is flagged as <strong>+8 percentage points OVER LIMIT</strong> and mandates joint Finance Controller sign-off.
+                Gold customer priority communicates enterprise strategic standing, but category discount ceilings take strict precedence. If a Gold client requests {(currentRules?.categoryLimits.Services ?? 10) + 8}% on a Service item ({currentRules?.categoryLimits.Services ?? 10}% ceiling), it is flagged as <strong>+8 percentage points OVER LIMIT</strong> and mandates joint Finance Controller sign-off.
               </span>
             </div>
           </div>
@@ -444,7 +449,7 @@ export default function DiscountRulesSettingsPage() {
             <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-600 flex items-start gap-2">
               <Info className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
               <span>
-                <strong>Margin Protection Rationale:</strong> Services carry high direct engineering costs and lower gross margins than standardized hardware. Therefore, the Services ceiling is strictly pinned at 10%.
+                <strong>Margin Protection Rationale:</strong> Services carry high direct engineering costs and lower gross margins than standardized hardware. Therefore, the Services ceiling is strictly pinned at {currentRules?.categoryLimits.Services ?? 10}%.
               </span>
             </div>
           </CardContent>

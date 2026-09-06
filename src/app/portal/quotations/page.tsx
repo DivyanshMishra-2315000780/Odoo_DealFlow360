@@ -75,7 +75,9 @@ export default function CustomerQuotationsPage() {
               {myQuotations.map((q) => (
                 <TableRow key={q.id} className="hover:bg-slate-50/80 transition">
                   <TableCell>
-                    <span className="font-mono font-bold text-slate-900 text-xs">{q.id}</span>
+                    <span className="font-mono font-bold text-slate-900 text-xs" title={q.id}>
+                      {q.id.startsWith('Q-') ? q.id : `Q-${q.id.slice(0, 8).toUpperCase()}`}
+                    </span>
                     <span className="text-[10px] text-slate-400 block font-mono">
                       {new Date(q.createdAt).toLocaleDateString()}
                     </span>
