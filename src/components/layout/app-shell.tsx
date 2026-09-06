@@ -24,7 +24,7 @@ import {
   Search,
   Bell,
   Command,
-  RotateCcw,
+
   Menu,
   X,
   ChevronLeft,
@@ -42,7 +42,7 @@ import { useToast } from '@/components/providers/query-provider';
 import { useAuth, normalizeRole, getRoleMeta } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { UserRole } from '@/types/auth';
+
 
 interface NavItemDef {
   label: string;
@@ -66,6 +66,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -344,15 +345,40 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             badge: 'Admin',
             tooltip: 'Configure tier discount caps, category ceilings & workflow rules',
           },
+          {
+            label: 'Employee Accounts',
+            href: '/settings/employees',
+            icon: UserCheck,
+            badge: 'Staff',
+            tooltip: 'Manage enterprise employee roster, roles, credentials & status',
+          },
         ];
     }
   }, [currentRole]);
 
-  const handleLogout = () => {
-    logout();
+  const handleResetData = async () => {
+    try {
+      await resetMutation.mutateAsync();
+      toast({
+        title: 'Data Refreshed',
+        description: 'Latest records have been requested from the server.',
+        type: 'success',
+      });
+    } catch {
+      toast({
+        title: 'Reset Failed',
+        description: 'Unable to clear demo storage.',
+        type: 'error',
+      });
+    }
+  };
+
+  const handleRoleSwitch = (newRole: UserRole) => {
+    switchRole(newRole);
+    setIsRoleDropdownOpen(false);
     toast({
-      title: 'Signed Out',
-      description: 'You have been successfully signed out.',
+      title: 'Sign in to another account',
+      description: 'Access follows the account authenticated by the server.',
       type: 'info',
     });
   };
@@ -479,16 +505,72 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               )}
             </div>
 
-            {/* Header Actions */}
+            {/* Quick Role Switcher Pill & Actions */}
             <div className="flex items-center gap-2 sm:gap-3">
-              {/* Active Role Badge */}
-              <div
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border shadow-2xs ${roleMeta.badgeClass}`}
-              >
-                <span className={`w-2 h-2 rounded-full ${roleMeta.dotColor}`} />
-                <span className="hidden sm:inline">{roleMeta.label}</span>
-                <span className="sm:hidden">{roleMeta.label.split(' ')[0]}</span>
+              {/* Role Switcher Dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition cursor-pointer shadow-2xs hover:opacity-90 ${roleMeta.badgeClass}`}
+                  title="Click to switch perspective between 5 user roles"
+                >
+                  <span className={`w-2 h-2 rounded-full ${roleMeta.dotColor}`} />
+                  <span className="hidden sm:inline">{roleMeta.label}</span>
+                  <span className="sm:hidden">{roleMeta.label.split(' ')[0]}</span>
+                  <ChevronDown className="w-3 h-3 text-slate-500" />
+                </button>
+
+                {isRoleDropdownOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setIsRoleDropdownOpen(false)}
+                    />
+                    <div className="absolute right-0 mt-2 w-64 rounded-lg bg-white border border-slate-200 shadow-enterprise-lg z-50 p-2 text-xs animate-in fade-in-0 zoom-in-95 duration-150">
+                      <div className="px-2.5 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-1">
+                        Switch Demo Role
+                      </div>
+                      {DEMO_ACCOUNTS.map((acc) => {
+                        const isSelected = normalizeRole(acc.role) === currentRole;
+                        return (
+                          <button
+                            key={acc.id}
+                            type="button"
+                            onClick={() => handleRoleSwitch(acc.role as UserRole)}
+                            className={`w-full text-left px-2.5 py-2 rounded-md transition flex flex-col gap-0.5 cursor-pointer ${
+                              isSelected
+                                ? 'bg-teal-50 text-teal-900 font-semibold'
+                                : 'text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-slate-900">{acc.roleLabel}</span>
+                              {isSelected && <CheckCircle className="w-3.5 h-3.5 text-teal-600" />}
+                            </div>
+                            <span className="text-[11px] text-slate-500 truncate">{acc.name} • {acc.company}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
+
+              {/* Demo Reset */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleResetData}
+                loading={resetMutation.isPending}
+                title="Reset local demo data to default state"
+                className="hidden sm:inline-flex text-slate-600 border-slate-300 hover:bg-slate-50"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                <span className="hidden lg:inline">Reset Demo</span>
+              </Button>
+
+              <div className="h-5 w-px bg-slate-200 hidden sm:block" />
 
               {/* Notifications */}
               <button
@@ -503,8 +585,12 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               <div className="h-5 w-px bg-slate-200 hidden sm:block" />
 
               {/* User Profile */}
-              <div className="flex items-center gap-2 pl-1 sm:pl-2">
-                <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-semibold text-xs ring-2 ring-teal-500/20 shadow-2xs">
+              <Link
+                href="/login"
+                title="Switch Account / Sign In"
+                className="flex items-center gap-2 pl-1 sm:pl-2 group"
+              >
+                <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-semibold text-xs ring-2 ring-teal-500/20 shadow-2xs group-hover:ring-teal-500 transition">
                   {user?.name
                     ? user.name
                         .split(' ')
@@ -512,29 +598,17 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                         .join('')
                         .substring(0, 2)
                         .toUpperCase()
-                    : 'U'}
+                    : 'AP'}
                 </div>
                 <div className="hidden xl:block text-left">
-                  <p className="text-xs font-semibold text-slate-800 leading-none">
-                    {user?.name || 'User'}
+                  <p className="text-xs font-semibold text-slate-800 leading-none group-hover:text-teal-700 transition">
+                    {user?.name || 'Arthur Pendelton'}
                   </p>
                   <p className="text-[10px] text-teal-600 font-medium leading-tight mt-0.5">
                     {roleMeta.label}
                   </p>
                 </div>
-              </div>
-
-              {/* Logout Button */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLogout}
-                className="text-xs text-rose-600 border-slate-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 flex items-center gap-1.5 transition cursor-pointer shadow-2xs ml-1"
-                title="Sign out of DealFlow360"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline font-medium">Logout</span>
-              </Button>
+              </Link>
             </div>
           </div>
         </div>
@@ -661,10 +735,10 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-bold flex items-center gap-1.5">
                       <Shield className="w-3.5 h-3.5" />
-                      Role Security Profile
+                      Enterprise Role Profile
                     </span>
                     <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.2 rounded bg-white/70">
-                      Demo
+                      Active
                     </span>
                   </div>
                   <p className="text-[11px] opacity-90 leading-snug">
@@ -732,6 +806,28 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                 </button>
               </div>
 
+              {/* Mobile Role Switcher */}
+              <div className="py-3 border-b border-slate-100">
+                <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1.5">
+                  Select Role View
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {DEMO_ACCOUNTS.map((acc) => (
+                    <button
+                      key={acc.id}
+                      type="button"
+                      onClick={() => handleRoleSwitch(acc.role as UserRole)}
+                      className={`text-left px-2 py-1.5 rounded text-xs transition ${
+                        normalizeRole(acc.role) === currentRole
+                          ? 'bg-teal-600 text-white font-bold'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {acc.roleLabel.split(' ')[0]}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               {/* Mobile Nav Items */}
               <nav className="py-3 space-y-1 flex-1">
@@ -774,11 +870,11 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleLogout}
-                  className="w-full text-xs justify-center gap-1.5 text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                  onClick={handleResetData}
+                  className="w-full text-xs justify-center gap-1.5"
                 >
-                  <LogOut className="w-3.5 h-3.5" />
-                  Logout
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Reset Demo Data
                 </Button>
 
                 <div className="text-[11px] text-slate-400 text-center">

@@ -417,3 +417,15 @@ export interface CommercialSubscription {
   invoiceHistory: SubscriptionInvoiceItem[];
   notes?: string;
 }
+
+export interface EmployeeUser {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: 'ADMIN' | 'SALES_MANAGER' | 'SALES_EXECUTIVE' | 'FINANCE_OFFICER' | 'CUSTOMER';
+  active: boolean;
+  department?: string;
+  createdAt: string;
+  updatedAt?: string;
+}

@@ -342,6 +342,7 @@ interface AuthContextType {
     userType?: 'CUSTOMER' | 'INTERNAL';
   }) => Promise<AuthUser>;
   logout: () => void;
+  refreshUser: () => Promise<AuthUser | null>;
   refreshSession: () => Promise<AuthUser | null>;
   getSessions: () => Promise<UserSession[]>;
   revokeSession: (sessionId: string) => Promise<boolean>;
@@ -367,6 +368,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       active = false;
     };
   }, []);
+  const refreshUser = useCallback(async () => {
+    const updated = await apiGetMe();
+    setUser(updated);
+    return updated;
+  }, []);
+  const login = useCallback(async (email: string, password: string): Promise<AuthUser> => {
+    const authenticated = await apiLogin(email, password);
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    setUser(authenticated);
+    return authenticated;
+  }, [queryClient]);
+  const signup = useCallback(async (data: { fullName: string; email: string; password: string; company: string }): Promise<AuthUser> => {
+    const [firstName, ...rest] = data.fullName.trim().split(/\s+/);
+    const authenticated = await apiSignup({firstName, lastName: rest.join(' ') || firstName, email: data.email, password: data.password, companyName: data.company});
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    setUser(authenticated);
+    return authenticated;
+  }, [queryClient]);
 
   const login = useCallback(
     async (email: string, password: string, overrideUser?: Partial<AuthUser>): Promise<AuthUser> => {
@@ -420,6 +441,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.location.assign('/login');
     });
   }, [queryClient]);
+  // A role is determined by the authenticated account. Choose another account by logging in.
+  const switchRole = useCallback(() => { logout(); }, [logout]);
+  return <AuthContext.Provider value={{ user, isLoading, login, switchRole, signup, logout, refreshUser }}>{children}</AuthContext.Provider>;
 
   const refreshSession = useCallback(async (): Promise<AuthUser | null> => {
     const refreshed = await apiRefreshToken();
