@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import React from 'react';
-import Link from 'next/link';
+import React from "react";
+import Link from "next/link";
 import {
   FileText,
   Clock,
@@ -9,32 +9,50 @@ import {
   ShieldCheck,
   AlertCircle,
   Eye,
-} from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { StatusBadge, RiskBadge } from '@/components/ui/status-badge';
-import { TierBadge } from '@/components/ui/tier-badge';
-import { useQuotations } from '@/hooks/use-dealflow';
-import { useAuth } from '@/lib/auth';
-import { formatCurrency, formatPercent } from '@/lib/utils';
+} from "lucide-react";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableHeader,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { StatusBadge, RiskBadge } from "@/components/ui/status-badge";
+import { TierBadge } from "@/components/ui/tier-badge";
+import { useQuotations } from "@/hooks/use-dealflow";
+import { useAuth } from "@/lib/auth";
+import { formatCurrency, formatPercent } from "@/lib/utils";
 
 export default function CustomerQuotationsPage() {
   const { data: quotations = [], isLoading } = useQuotations();
   const { user } = useAuth();
 
-  const customerName = user?.company || 'Acme Corporation';
+  const customerName = user?.company || "Acme Corporation";
 
   // Filter for this customer or show all deals with Acme highlighted
   const myQuotations = React.useMemo(() => {
     if (!user) return quotations;
-    const compLower = (user.company || '').toLowerCase();
-    const filtered = quotations.filter(
-      (q) =>
-        (q.customerId && user.id && q.customerId === user.customerId) ||
-        (q.customerName && compLower && q.customerName.toLowerCase().includes(compLower))
-    );
-    return filtered;
+    if (user.role === "CUSTOMER") {
+      const compLower = (user.company || "").toLowerCase();
+      const filtered = quotations.filter(
+        (q) =>
+          (user.customerId && q.customerId === user.customerId) ||
+          (q.customerName &&
+            compLower &&
+            q.customerName.toLowerCase().includes(compLower)),
+      );
+      return filtered.length > 0 ? filtered : quotations;
+    }
+    return quotations;
   }, [quotations, user]);
 
   return (
@@ -46,7 +64,8 @@ export default function CustomerQuotationsPage() {
             My Commercial Quotations
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Review contractual proposals, line-item pricing breakdowns, and submit counter-offers.
+            Review contractual proposals, line-item pricing breakdowns, and
+            submit counter-offers.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -65,7 +84,9 @@ export default function CustomerQuotationsPage() {
                 <TableHead>Quotation ID</TableHead>
                 <TableHead>Deal Scope / Title</TableHead>
                 <TableHead>Account Tier</TableHead>
-                <TableHead className="text-right">Total Applied Discount</TableHead>
+                <TableHead className="text-right">
+                  Total Applied Discount
+                </TableHead>
                 <TableHead className="text-right">Net Grand Total</TableHead>
                 <TableHead>Commercial Status</TableHead>
                 <TableHead className="text-right">Action</TableHead>
@@ -73,17 +94,27 @@ export default function CustomerQuotationsPage() {
             </TableHeader>
             <TableBody>
               {myQuotations.map((q) => (
-                <TableRow key={q.id} className="hover:bg-slate-50/80 transition">
+                <TableRow
+                  key={q.id}
+                  className="hover:bg-slate-50/80 transition"
+                >
                   <TableCell>
-                    <span className="font-mono font-bold text-slate-900 text-xs" title={q.id}>
-                      {q.id.startsWith('Q-') ? q.id : `Q-${q.id.slice(0, 8).toUpperCase()}`}
+                    <span
+                      className="font-mono font-bold text-slate-900 text-xs"
+                      title={q.id}
+                    >
+                      {q.id.startsWith("Q-")
+                        ? q.id
+                        : `Q-${q.id.slice(0, 8).toUpperCase()}`}
                     </span>
                     <span className="text-[10px] text-slate-400 block font-mono">
                       {new Date(q.createdAt).toLocaleDateString()}
                     </span>
                   </TableCell>
                   <TableCell>
-                    <span className="font-semibold text-slate-900 block text-xs">{q.title}</span>
+                    <span className="font-semibold text-slate-900 block text-xs">
+                      {q.title}
+                    </span>
                     <span className="text-[11px] text-slate-500">
                       {q.customerName} • {q.items.length} line items
                     </span>
@@ -104,7 +135,11 @@ export default function CustomerQuotationsPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <Link href={`/portal/quotations/${q.id}`}>
-                      <Button variant="outline" size="sm" className="gap-1 text-xs">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1 text-xs"
+                      >
                         <Eye className="w-3.5 h-3.5 text-slate-500" />
                         Review & Negotiate
                       </Button>

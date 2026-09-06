@@ -12,6 +12,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   (
     {
       className,
+      type = 'button',
       variant = 'default',
       size = 'md',
       loading = false,
@@ -36,15 +37,16 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     }[variant];
 
     const sizeClasses = {
-      sm: 'text-xs h-8 px-2.5 gap-1.5',
-      md: 'text-xs h-9 px-3.5 gap-2',
+      sm: 'text-sm h-9 px-3 gap-1.5',
+      md: 'text-sm h-10 px-4 gap-2',
       lg: 'text-sm h-10 px-4 gap-2',
-      icon: 'h-8 w-8 p-0',
+      icon: 'h-10 w-10 p-0',
     }[size];
 
     return (
       <button
         ref={ref}
+        type={type}
         disabled={disabled || loading}
         className={cn(baseClasses, variantClasses, sizeClasses, className)}
         {...props}

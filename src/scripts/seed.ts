@@ -209,7 +209,7 @@ async function main() {
 
   const productIds = [prdLp14Id, prdDockId, prdOnsiteId, prdExtWarId, prdCareId, prdSecGwId];
   const whIds = [whChiId, whEwkId, whRnoId];
-  const inventoryRecords: any[] = [];
+  const inventoryRecords: Array<typeof inventory.$inferInsert> = [];
   let invCounter = 1;
 
   for (const w of whIds) {

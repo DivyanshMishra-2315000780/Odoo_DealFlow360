@@ -191,6 +191,7 @@ export const categories = pgTable("categories", {
 });
 
 export const products = pgTable("products", {
+  metadata: jsonb("metadata").$type<{status?: 'ACTIVE'|'DRAFT'|'ARCHIVED';variants?: Array<{id:string;name:string;sku:string;color?:string;ram?:string;manufacturer?:string;priceAdjustment:number;availableStock:number}>}>().default({}).notNull(),
   id: text("id").primaryKey(),
   sku: text("sku").notNull().unique(),
   name: text("name").notNull(),
@@ -291,6 +292,7 @@ export const quoteRequestItems = pgTable("quote_request_items", {
 }, (table) => [index("quote_request_items_request_id_idx").on(table.quoteRequestId)]);
 
 export const quotations = pgTable("quotations", {
+  title:text("title"),
   id: text("id").primaryKey(),
   quoteRequestId: text("quote_request_id").references(() => quoteRequests.id).unique(),
   quoteNumber: text("quote_number").notNull().unique(),

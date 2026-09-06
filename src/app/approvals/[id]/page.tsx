@@ -61,14 +61,7 @@ export default function ApprovalDecisionPage() {
   }, [quotation]);
 
   // Determine required hierarchy approval chain
-  const approvalChain = useMemo(() => {
-    if (!quotation) return 'Sales Manager → Finance';
-    const maxExcess = Math.max(0, ...quotation.items.map((i) => i.excessPercent));
-    if (quotation.riskDiagnosis.level === 'CRITICAL' || maxExcess > 10) {
-      return 'Sales Manager → Finance → Executive VP';
-    }
-    return 'Sales Manager → Finance';
-  }, [quotation]);
+  const approvalChain = 'Sales Manager ? Finance Officer';
 
   // Workflow Timeline Stages
   // Submitted ↓ Sales Manager ↓ Finance ↓ Confirmed
@@ -77,11 +70,11 @@ export default function ApprovalDecisionPage() {
 
     const isReturned = quotation.status === 'REVISION_REQUIRED';
     const isApproved = quotation.status === 'APPROVED';
-    const isConfirmed = quotation.status === 'CONFIRMED' || quotation.status === 'FULFILLMENT';
+    const isConfirmed = ['CONFIRMED','FULFILLMENT','BILLING','COMPLETED'].includes(quotation.status);
     const isRejected = quotation.status === 'REJECTED';
 
     const smDone = Boolean(quotation.salesManagerApproved);
-    const finDone = isApproved || isConfirmed;
+    const finDone = Boolean(quotation.financeApproved);
 
     const smCurrent = !smDone && !isReturned && !isRejected && !isApproved && !isConfirmed;
     const finCurrent = smDone && !finDone && !isReturned && !isRejected;
@@ -102,7 +95,7 @@ export default function ApprovalDecisionPage() {
       {
         id: 'sales_manager',
         label: 'Sales Manager',
-        actor: 'Marcus Vance / Deal Desk',
+        actor: 'Sales Manager',
         date: smDone ? 'Endorsed' : 'Awaiting Endorsement',
         status: isRejected
           ? ('REJECTED' as const)
@@ -120,7 +113,7 @@ export default function ApprovalDecisionPage() {
       {
         id: 'finance',
         label: 'Finance Officer',
-        actor: 'Sarah Sterling (Finance Controller)',
+        actor: 'Finance Officer',
         date: finDone ? 'Signed Off' : finCurrent ? 'Awaiting Action' : 'Pending SM Sign-Off',
         status: isRejected
           ? ('REJECTED' as const)
@@ -164,14 +157,14 @@ export default function ApprovalDecisionPage() {
     const isFinanceOfficer = user?.role === 'FINANCE_OFFICER';
 
     // If Sales Manager is approving and deal requires dual approval
-    const needsDualApproval = quotation.riskDiagnosis.level === 'HIGH' || quotation.riskDiagnosis.level === 'CRITICAL';
+    const needsDualApproval = true;
     const isStep1ManagerApproval = decision === 'APPROVED' && (!quotation.salesManagerApproved && (isSalesManager || !isFinanceOfficer)) && needsDualApproval;
 
     try {
       if (isStep1ManagerApproval) {
         await updateStatusMutation.mutateAsync({
           id: quotation.id,
-          status: 'PENDING_APPROVAL',
+          status: 'APPROVED',
           note: dialogReason.trim() || 'Sales Manager approved deal terms and tier concessions. Escalated to Finance Controller for final sign-off.',
           actor: user?.name ? `${user.name} (Sales Manager)` : 'Marcus Vance (Sales Manager)',
           meta: {
@@ -181,7 +174,7 @@ export default function ApprovalDecisionPage() {
 
         toast({
           title: 'Sales Manager Endorsement Recorded',
-          description: `Quotation ${quotation.id} endorsed. Escalated to Finance Controller Sarah Sterling for final approval.`,
+          description: `Quotation ${quotation.id} endorsed. Sent to the Finance Officer for final approval.`,
           type: 'success',
         });
       } else {
@@ -189,7 +182,7 @@ export default function ApprovalDecisionPage() {
           id: quotation.id,
           status: decision,
           note: dialogReason.trim() || (decision === 'APPROVED' ? 'Finance Controller granted commercial exception sign-off.' : `Quotation ${decision.toLowerCase()} by authorized controller.`),
-          actor: user?.name ? `${user.name} (${user.role})` : 'Sarah Sterling (Finance Controller)',
+          actor: user?.name ? `${user.name} (${user.role})` : 'Finance Officer',
           meta: {
             salesManagerApproved: true,
             financeApproved: decision === 'APPROVED',
@@ -243,7 +236,7 @@ export default function ApprovalDecisionPage() {
     );
   }
 
-  const isPending = quotation.status === 'PENDING_APPROVAL';
+  const isPending = quotation.status === 'PENDING_APPROVAL' && quotation.approvalRole === user?.role;
 
   return (
     <div className="space-y-6">
@@ -270,7 +263,7 @@ export default function ApprovalDecisionPage() {
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Decision Authority: <strong>Sarah Sterling (Finance Controller)</strong> • Value: <strong>{formatCurrency(quotation.grandTotal)}</strong>
+              Decision Authority: <strong>Finance Officer</strong> • Value: <strong>{formatCurrency(quotation.grandTotal)}</strong>
             </p>
           </div>
         </div>

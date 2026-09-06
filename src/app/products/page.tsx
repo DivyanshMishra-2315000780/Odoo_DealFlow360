@@ -266,7 +266,7 @@ export default function ProductsListPage() {
               ].map((t) => (
                 <button
                   key={t.value}
-                  onClick={() => setSelectedType(t.value as any)}
+                  onClick={() => setSelectedType(t.value as typeof selectedType)}
                   className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                     selectedType === t.value
                       ? 'bg-teal-700 text-white'

@@ -6,7 +6,7 @@ export async function listOrdersFor(customerId?: string, salesExecId?: string) {
   const query = db.select({ order: salesOrders, quotation: quotations })
     .from(salesOrders).innerJoin(quotations, eq(salesOrders.quotationId, quotations.id))
     .orderBy(desc(salesOrders.createdAt));
-  if (customerId) return query.where(eq(salesOrders.customerId, customerId));
+  if (customerId !== undefined) return query.where(eq(salesOrders.customerId, customerId));
   if (salesExecId) return query.where(eq(quotations.salesExecId, salesExecId));
   return query;
 }

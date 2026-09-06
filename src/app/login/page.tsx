@@ -44,8 +44,6 @@ export default function LoginPage() {
 
   const [showPassword, setShowPassword] = useState(false);
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [isSubmittingForgot, setIsSubmittingForgot] = useState(false);
 
   const {
     register,
@@ -100,21 +98,6 @@ export default function LoginPage() {
     setValue('password', account.passwordHint, { shouldValidate: true });
   };
 
-  const handleForgotSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!forgotEmail) return;
-    setIsSubmittingForgot(true);
-    setTimeout(() => {
-      setIsSubmittingForgot(false);
-      setIsForgotPasswordOpen(false);
-      toast({
-        title: 'Password Reset Dispatched',
-        description: `Instructions sent to ${forgotEmail} if an account exists.`,
-        type: 'info',
-      });
-      setForgotEmail('');
-    }, 600);
-  };
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-50 text-slate-900 selection:bg-teal-100 selection:text-teal-900">
@@ -314,46 +297,7 @@ export default function LoginPage() {
 
       {/* Forgot Password Dialog */}
       <Dialog open={isForgotPasswordOpen} onOpenChange={setIsForgotPasswordOpen}>
-        <form onSubmit={handleForgotSubmit}>
-          <DialogHeader>
-            <DialogTitle>Reset Password</DialogTitle>
-            <DialogDescription>
-              Enter your corporate email address. We will transmit a secure single-use recovery link.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-3">
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Corporate Email
-            </label>
-            <Input
-              type="email"
-              placeholder="name@company.com"
-              value={forgotEmail}
-              onChange={(e) => setForgotEmail(e.target.value)}
-              required
-            />
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsForgotPasswordOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="default"
-              size="sm"
-              loading={isSubmittingForgot}
-            >
-              Transmit Reset Link
-            </Button>
-          </DialogFooter>
-        </form>
+        <DialogHeader><DialogTitle>Recover your account</DialogTitle><DialogDescription>Contact your administrator to reset your password. Email recovery is not configured for this workspace.</DialogDescription></DialogHeader><DialogFooter><Button onClick={()=>setIsForgotPasswordOpen(false)}>Close</Button></DialogFooter>
       </Dialog>
     </div>
   );

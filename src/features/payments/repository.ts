@@ -1,7 +1,7 @@
 import Decimal from 'decimal.js';
 import { BusinessError } from '@/lib/errors';
 import { calculateDealHealth } from '@/engines/deal-health.engine';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, or } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db';
 import { fulfillments, quotationLines, dealHealth, dealHealthEvents, invoices, payments, quotations, salesOrders } from '@/db/schema';
@@ -9,7 +9,7 @@ import { fulfillments, quotationLines, dealHealth, dealHealthEvents, invoices, p
 export async function findInvoiceContext(invoiceId: string) {
   const [record] = await db.select({ invoice: invoices, quote: quotations }).from(invoices)
     .leftJoin(quotations, eq(invoices.quotationId, quotations.id))
-    .where(eq(invoices.id, invoiceId)).limit(1);
+    .where(or(eq(invoices.id, invoiceId), eq(invoices.invoiceNumber, invoiceId))).limit(1);
   return record ?? null;
 }
 
@@ -31,7 +31,7 @@ export async function findPayment(id: string) {
 export async function listPaymentsFor(customerId?: string) {
   const query = db.select({ payment: payments, invoice: invoices }).from(payments)
     .innerJoin(invoices, eq(payments.invoiceId, invoices.id)).orderBy(desc(payments.createdAt));
-  return customerId ? query.where(eq(invoices.customerId, customerId)) : query;
+  return customerId !== undefined ? query.where(eq(invoices.customerId, customerId)) : query;
 }
 
 export async function markPaymentFailed(id: string, reason: string) {

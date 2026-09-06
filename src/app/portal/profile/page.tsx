@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useAuth } from '@/lib/auth';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { request } from "@/lib/http/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,6 +17,7 @@ export default function CustomerProfilePage() {
     queryFn: () => request<Profile>("/api/customer/profile"),
   });
   const client = useQueryClient();
+  const {refreshUser}=useAuth();
   const { toast } = useToast();
   const [changes, setChanges] = useState<Record<string, string>>({});
   const save = useMutation({
@@ -26,6 +28,7 @@ export default function CustomerProfilePage() {
       }),
     onSuccess: () => {
       void client.invalidateQueries();
+      void refreshUser();
       setChanges({});
       toast({ title: "Profile saved", type: "success" });
     },

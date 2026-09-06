@@ -1,8 +1,18 @@
-'use client';
+"use client";
 
-import React, { useState, useMemo, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import {
+  evaluateQuotationDiscounts,
+} from "@/engines/discount.engine";
+import {
+  calculateLineAmounts,
+  calculateQuoteTotals,
+} from "@/engines/pricing.engine";
+import { calculateRisk } from "@/engines/risk.engine";
+import { useQuery } from "@tanstack/react-query";
+import { request } from "@/lib/http/client";
+import React, { useState, useMemo, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import {
   FileText,
   Plus,
@@ -13,28 +23,43 @@ import {
   ShieldAlert,
   Sparkles,
   Info,
-  Calendar,
   Building2,
-  DollarSign,
   Layers,
   TrendingUp,
   Tag,
   X,
   Inbox,
   ExternalLink,
-} from 'lucide-react';
-import { useCustomers, useProducts, useSaveQuotation, useRequirement } from '@/hooks/use-dealflow';
-import { useToast } from '@/components/providers/query-provider';
-import { formatCurrency, formatPercent } from '@/lib/utils';
-import { evaluateLineItem, evaluateQuotationRisk, calculateEffectiveDiscountLimit } from '@/lib/discount-engine';
-import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
-import { TierBadge } from '@/components/ui/tier-badge';
-import { RiskBadge } from '@/components/ui/status-badge';
-import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
-import { Customer, Product, Quotation, QuotationLineItem, PRICE_LISTS, PriceList } from '@/types/dealflow';
+} from "lucide-react";
+import {
+  useCustomers,
+  useProducts,
+  useSaveQuotation,
+  useRequirement,
+} from "@/hooks/use-dealflow";
+import { useToast } from "@/components/providers/query-provider";
+import { formatCurrency, formatPercent } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { TierBadge } from "@/components/ui/tier-badge";
+import { RiskBadge } from "@/components/ui/status-badge";
+import {
+  Table,
+  TableHeader,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
+import {
+  CustomerRequirement,
+  Customer,
+  Product,
+  Quotation,
+  QuotationLineItem,
+} from "@/types/dealflow";
 
 interface DraftLineState {
   tempId: string;
@@ -55,116 +80,133 @@ interface UpsellSuggestion {
 }
 
 function getProductCost(prod?: Product): number {
-  if (!prod) return 0;
-  if (prod.category === 'Hardware') return Math.round(prod.basePrice * 0.60 * 100) / 100;
-  return Math.round(prod.basePrice * 0.40 * 100) / 100;
+  return prod?.baseCost ?? 0;
 }
 
 const UPSELL_SUGGESTIONS: UpsellSuggestion[] = [];
 
 function NewQuotationForm() {
+  const params = useSearchParams();
+  const requirementId = params.get("requirementId");
+  const customers = useCustomers();
+  const products = useProducts();
+  const requirement = useRequirement(requirementId ?? "");
+  if (
+    customers.isLoading ||
+    products.isLoading ||
+    (requirementId && requirement.isLoading)
+  )
+    return <p className="p-8 text-slate-500">Loading quotation data?</p>;
+  const error = customers.error ?? products.error ?? requirement.error;
+  if (error)
+    return (
+      <p role="alert" className="p-8 text-red-700">
+        {error.message}
+      </p>
+    );
+  return (
+    <QuotationEditor
+      key={requirementId ?? "new"}
+      customers={customers.data ?? []}
+      products={products.data ?? []}
+      requirement={requirement.data ?? undefined}
+      requirementId={requirementId}
+    />
+  );
+}
+function QuotationEditor({
+  customers,
+  products,
+  requirement,
+  requirementId,
+}: {
+  customers: Customer[];
+  products: Product[];
+  requirement?: CustomerRequirement;
+  requirementId: string | null;
+}) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const requirementId = searchParams.get('requirementId');
-  const { data: requirement } = useRequirement(requirementId || '');
-
   const { toast } = useToast();
-  const { data: customers = [] } = useCustomers();
-  const { data: products = [] } = useProducts();
   const saveMutation = useSaveQuotation();
-
-  // Form Fields
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
-  const [title, setTitle] = useState<string>('Enterprise System Deployment Proposal');
-  const [priceList, setPriceList] = useState<PriceList>('Standard Commercial 2026');
-  const [deliveryDate, setDeliveryDate] = useState<string>(new Date(Date.now()+30*86400000).toISOString().slice(0,10));
-  const [notes, setNotes] = useState<string>('Standard 30-day procurement payment terms. Priority hardware staging included.');
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [hasPrefilledFromReq, setHasPrefilledFromReq] = useState<boolean>(false);
-
-  // Default initial customer
-  React.useEffect(() => {
-    if (customers.length > 0 && !selectedCustomerId && !requirementId) {
-      setSelectedCustomerId(customers[0].id);
-    }
-  }, [customers, selectedCustomerId, requirementId]);
-
-  // Pre-fill state when originating from a Customer Requirement
-  React.useEffect(() => {
-    if (requirement && products.length > 0 && !hasPrefilledFromReq) {
-      setSelectedCustomerId(requirement.customerId);
-      setTitle(`Quotation for ${requirement.title}`);
-      if (requirement.additionalNotes || requirement.description) {
-        setNotes(`Customer Requirement notes: ${requirement.additionalNotes || requirement.description}\nStandard 30-day procurement payment terms apply.`);
-      }
-
-      // Map requirement items to existing catalog products
-      if (requirement.items && requirement.items.length > 0) {
-        const mappedLines: DraftLineState[] = requirement.items.map((reqItem, idx) => {
-          const lowerName = reqItem.name.toLowerCase();
-          let matchedProd = products.find((p) => p.name.toLowerCase().includes(lowerName));
-
-          if (!matchedProd) {
-            if (lowerName.includes('laptop') || lowerName.includes('pc') || lowerName.includes('computer')) {
-              matchedProd = products.find((p) => p.id === 'PROD-101');
-            } else if (lowerName.includes('dock') || lowerName.includes('hub')) {
-              matchedProd = products.find((p) => p.id === 'PROD-102');
-            } else if (lowerName.includes('setup') || lowerName.includes('install') || lowerName.includes('service')) {
-              matchedProd = products.find((p) => p.id === 'PROD-103');
-            } else if (lowerName.includes('warranty')) {
-              matchedProd = products.find((p) => p.id === 'PROD-104');
-            } else if (lowerName.includes('care') || lowerName.includes('support')) {
-              matchedProd = products.find((p) => p.id === 'PROD-105');
-            }
-          }
-
-          if (!matchedProd) {
-            matchedProd = undefined;
-          }
-
+  const [draftLines, setLines] = useState<DraftLineState[]>(() =>
+    requirement?.items?.length
+      ? requirement.items.map((item, index) => {
+          const product = products.find((p) =>
+            p.name.toLowerCase().includes(item.name.toLowerCase()),
+          );
           return {
-            tempId: `line-req-${idx + 1}-${Date.now()}`,
-            productId: matchedProd?.id ?? '',
-            quantity: reqItem.quantity,
-            unitPrice: matchedProd?.basePrice ?? 0,
-            discountPercent: 5,
+            tempId: "requirement-" + index,
+            productId: product?.id ?? "",
+            quantity: item.quantity,
+            unitPrice: product?.basePrice ?? 0,
+            discountPercent: 0,
           };
-        });
-
-        setLines(mappedLines);
-      }
-
-      setHasPrefilledFromReq(true);
-      toast({
-        title: 'Requirement Data Imported',
-        description: `Successfully loaded customer demand items from ${requirement.id}.`,
-        type: 'info',
-      });
-    }
-  }, [requirement, products, hasPrefilledFromReq, toast]);
-
+        })
+      : products.length
+        ? [
+            {
+              tempId: "initial",
+              productId: products[0].id,
+              quantity: 1,
+              unitPrice: products[0].basePrice,
+              discountPercent: 0,
+            },
+          ]
+        : [],
+  );
+  // Form Fields
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(
+    () => requirement?.customerId ?? customers[0]?.id ?? "",
+  );
+  const [title, setTitle] = useState<string>(() =>
+    requirement ? `Quotation for ${requirement.title}` : "New quotation",
+  );
+  const [priceList, setPriceList] = useState<string>("");
+  const { data: pricing = [] } = useQuery({
+    queryKey: ["pricing"],
+    queryFn: () =>
+      request<
+        Array<{
+          id: string;
+          name: string;
+          currency: string;
+          active: boolean;
+          items: Array<{ productId: string; unitPrice: string }>;
+        }>
+      >("/api/pricing"),
+  });
+  const { data: rules = [] } = useQuery({
+    queryKey: ["policies-raw"],
+    queryFn: () =>
+      request<Parameters<typeof evaluateQuotationDiscounts>[2]>(
+        "/api/policies",
+      ),
+  });
+  const [deliveryDate, setDeliveryDate] = useState<string>(() =>
+    new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+  );
+  const [notes, setNotes] = useState<string>(
+    "Standard 30-day procurement payment terms. Priority hardware staging included.",
+  );
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const selectedCustomer = useMemo(() => {
     return customers.find((c) => c.id === selectedCustomerId) || customers[0];
   }, [customers, selectedCustomerId]);
 
   // Multi-line Items State
-  const [lines, setLines] = useState<DraftLineState[]>([]);
 
-  // Ensure default lines have valid product IDs once products load
-  React.useEffect(() => {
-    if (products.length > 0 && lines.length === 0) {
-      setLines([
-        {
-          tempId: `line-${Date.now()}`,
-          productId: products[0].id,
-          quantity: 5,
-          unitPrice: products[0].basePrice,
-          discountPercent: 5,
-        },
-      ]);
-    }
-  }, [products, lines.length]);
-
+  const selectedList =
+    pricing.find(
+      (list) =>
+        list.active && (list.name === priceList || list.id === priceList),
+    ) ?? pricing.find((list) => list.active);
+  const lines = draftLines.map((line) => ({
+    ...line,
+    unitPrice: Number(
+      selectedList?.items.find((item) => item.productId === line.productId)
+        ?.unitPrice ?? line.unitPrice,
+    ),
+  }));
   // Line modification helpers
   const handleAddLine = () => {
     const fallbackProd = products[0];
@@ -184,9 +226,10 @@ function NewQuotationForm() {
   const handleRemoveLine = (tempId: string) => {
     if (lines.length <= 1) {
       toast({
-        title: 'Minimum Line Required',
-        description: 'A quotation must contain at least one product or service line item.',
-        type: 'warning',
+        title: "Minimum Line Required",
+        description:
+          "A quotation must contain at least one product or service line item.",
+        type: "warning",
       });
       return;
     }
@@ -204,65 +247,91 @@ function NewQuotationForm() {
               productId: prod.id,
               unitPrice: prod.basePrice,
             }
-          : l
-      )
+          : l,
+      ),
     );
   };
 
   const handleLineFieldChange = (
     tempId: string,
-    field: 'quantity' | 'unitPrice' | 'discountPercent',
-    value: number
+    field: "quantity" | "unitPrice" | "discountPercent",
+    value: number,
   ) => {
     setLines((prev) =>
-      prev.map((l) => (l.tempId === tempId ? { ...l, [field]: Math.max(0, value) } : l))
+      prev.map((l) =>
+        l.tempId === tempId ? { ...l, [field]: Math.max(0, value) } : l,
+      ),
     );
   };
 
-  // Real-Time Evaluation Engine for all lines
-  const evaluatedLines: QuotationLineItem[] = useMemo(() => {
-    if (!selectedCustomer) return [];
-
-    return lines.map((l, idx) => {
-      const prod = products.find((p) => p.id === l.productId) || products[0];
-      const category = prod ? prod.category : 'Hardware';
-      const productName = prod ? prod.name : 'Selected Product';
-
-      return evaluateLineItem(
-        {
-          id: `LI-NEW-${idx + 1}`,
-          productId: l.productId,
-          productName,
-          category,
-          unitPrice: l.unitPrice,
-          quantity: l.quantity,
-          discountPercent: l.discountPercent,
-        },
-        selectedCustomer.tier
-      );
-    });
-  }, [lines, products, selectedCustomer]);
-
-  // Aggregate Deal Evaluation
-  const dealEvaluation = useMemo(() => {
-    if (!selectedCustomer) {
+  // The preview shares the pricing, discount and risk engines used by the API.
+  const preview = useMemo(() => {
+    const priced = lines.map((line) => {
+      const product = products.find((p) => p.id === line.productId);
       return {
-        subtotal: 0,
-        totalDiscountAmount: 0,
-        grandTotal: 0,
-        dealHealthScore: 100,
-        riskDiagnosis: {
-          level: 'LOW' as const,
-          whatHappened: '',
-          whyItMatters: '',
-          nextAction: '',
-          requiresFinanceApproval: false,
-          requiresExecutiveApproval: false,
-        },
+        id: line.tempId,
+        productId: line.productId,
+        categoryId: product?.categoryId,
+        discountPercentage: line.discountPercent,
+        ...calculateLineAmounts(
+          line.quantity,
+          line.unitPrice,
+          product?.baseCost ?? 0,
+          line.discountPercent,
+        ),
       };
-    }
-    return evaluateQuotationRisk(evaluatedLines, selectedCustomer.tier);
-  }, [evaluatedLines, selectedCustomer]);
+    });
+    const tier = selectedCustomer?.tier.toUpperCase() ?? "BRONZE";
+    const discount = evaluateQuotationDiscounts(
+      { salesExecRole: "SALES_EXECUTIVE" },
+      priced.map((line) => ({ ...line, netAmount: line.netAmount.toString() })),
+      rules,
+      tier,
+    );
+    const totals = calculateQuoteTotals(priced);
+    const risk = calculateRisk(
+      { customerTier: tier },
+      discount,
+      totals.marginPercentage,
+      totals.netSubtotal,
+    );
+    return { priced, discount, totals, risk };
+  }, [lines, products, selectedCustomer, rules]);
+  const evaluatedLines: QuotationLineItem[] = lines.map((line, index) => {
+    const product = products.find((p) => p.id === line.productId);
+    const result = preview.discount.lineResults[index];
+    return {
+      id: line.tempId,
+      productId: line.productId,
+      productName: product?.name ?? "Select a product",
+      category: product?.category ?? "Hardware",
+      unitPrice: line.unitPrice,
+      quantity: line.quantity,
+      discountPercent: line.discountPercent,
+      effectiveLimit: result.allowedDiscount.toNumber(),
+      isViolation: result.status === "EXCEEDED",
+      excessPercent: result.excessDiscount.toNumber(),
+      lineTotal: preview.priced[index].netAmount.toNumber(),
+    };
+  });
+  const dealEvaluation = {
+    subtotal: preview.totals.subtotal.toNumber(),
+    totalDiscountAmount: preview.totals.totalDiscount.toNumber(),
+    grandTotal: preview.totals.netSubtotal.toNumber(),
+    dealHealthScore: Math.max(0, 100 - preview.risk.riskScore),
+    riskDiagnosis: {
+      level: preview.risk.riskLevel as Quotation["riskDiagnosis"]["level"],
+      whatHappened:
+        preview.risk.riskReasons.join(" ") ||
+        "Pricing and discounts are within current policy.",
+      whyItMatters:
+        "Margin, discount exceptions and deal value determine risk.",
+      nextAction:
+        "Submit for Sales Manager review, followed by Finance Officer approval.",
+      requiresFinanceApproval: true,
+      requiresExecutiveApproval: false,
+    },
+  };
 
   // Upsell state & handlers
   const [dismissedUpsells, setDismissedUpsells] = useState<string[]>([]);
@@ -281,9 +350,9 @@ function NewQuotationForm() {
       },
     ]);
     toast({
-      title: 'Upsell Attached',
+      title: "Upsell Attached",
       description: `${rec.title} attached with 0% discount (${rec.marginLift}). Deal gross margin improved.`,
-      type: 'success',
+      type: "success",
     });
   };
 
@@ -301,35 +370,47 @@ function NewQuotationForm() {
 
   const dealGrossMargin = useMemo(() => {
     if (dealEvaluation.grandTotal <= 0) return 0;
-    const profit = Math.max(0, dealEvaluation.grandTotal - totalCost);
+    const profit = dealEvaluation.grandTotal - totalCost;
     return Math.round((profit / dealEvaluation.grandTotal) * 100);
   }, [dealEvaluation.grandTotal, totalCost]);
 
   // Submission handler
-  const handleSave = async (intent: 'DRAFT' | 'SUBMIT') => {
+  const handleSave = async (intent: "DRAFT" | "SUBMIT") => {
     if (!selectedCustomer) return;
     if (!title.trim()) {
       toast({
-        title: 'Title Required',
-        description: 'Please provide a descriptive title for this commercial quotation.',
-        type: 'error',
+        title: "Title Required",
+        description:
+          "Please provide a descriptive title for this commercial quotation.",
+        type: "error",
       });
       return;
     }
 
+    if (
+      lines.some(
+        (line) =>
+          !Number.isInteger(line.quantity) ||
+          line.quantity < 1 ||
+          line.discountPercent > 100 ||
+          !selectedList?.items.some(
+            (item) => item.productId === line.productId,
+          ),
+      )
+    ) {
+      toast({
+        title: "Check quotation items",
+        description:
+          "Every item needs a positive whole quantity, a discount from 0 to 100%, and a price on the selected list.",
+        type: "error",
+      });
+      return;
+    }
     setIsSubmitting(true);
     const newQuoteId = `Q-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    let status: Quotation['status'] = 'DRAFT';
-    if (intent === 'SUBMIT') {
-      if (dealEvaluation.riskDiagnosis.requiresFinanceApproval) {
-        status = 'PENDING_APPROVAL';
-      } else if (dealEvaluation.riskDiagnosis.level === 'MEDIUM') {
-        status = 'PENDING_APPROVAL';
-      } else {
-        status = 'APPROVED';
-      }
-    }
+    const status: Quotation["status"] =
+      intent === "DRAFT" ? "DRAFT" : "PENDING_APPROVAL";
 
     const timestamp = new Date().toISOString();
 
@@ -337,15 +418,16 @@ function NewQuotationForm() {
       {
         id: `AUD-${Date.now()}-1`,
         timestamp,
-        actor: 'Marcus Vance (Account Executive)',
-        action: intent === 'DRAFT' ? 'Quotation Drafted' : 'Quotation Submitted',
+        actor: "Marcus Vance (Account Executive)",
+        action:
+          intent === "DRAFT" ? "Quotation Drafted" : "Quotation Submitted",
         details:
-          intent === 'DRAFT'
+          intent === "DRAFT"
             ? `Draft created for ${selectedCustomer.name}.`
-            : status === 'PENDING_APPROVAL'
-            ? `Submitted for approval due to policy exception (${dealEvaluation.riskDiagnosis.whatHappened}).`
-            : `Submitted and cleared automatically within ${selectedCustomer.tier} margin bounds.`,
-        badgeType: intent === 'DRAFT' ? 'default' : status === 'APPROVED' ? 'success' : 'warning',
+            : status === "PENDING_APPROVAL"
+              ? `Submitted for approval due to policy exception (${dealEvaluation.riskDiagnosis.whatHappened}).`
+              : `Submitted and cleared automatically within ${selectedCustomer.tier} margin bounds.`,
+        badgeType: intent === "DRAFT" ? "default" : "warning",
       } as const,
     ];
 
@@ -366,7 +448,7 @@ function NewQuotationForm() {
       updatedAt: timestamp,
       dealHealthScore: dealEvaluation.dealHealthScore,
       notes: notes.trim(),
-      owner: 'Marcus Vance',
+      owner: "Marcus Vance",
       priceList,
       deliveryDate,
       requirementId: requirementId || undefined,
@@ -375,16 +457,16 @@ function NewQuotationForm() {
     try {
       const saved = await saveMutation.mutateAsync(quotationPayload);
       toast({
-        title: intent === 'DRAFT' ? 'Draft Saved' : 'Quotation Submitted',
+        title: intent === "DRAFT" ? "Draft Saved" : "Quotation Submitted",
         description: `Quotation ${saved.id} has been successfully recorded in the deal pipeline.`,
-        type: 'success',
+        type: "success",
       });
       router.push(`/quotes/${saved.id}`);
     } catch {
       toast({
-        title: 'Submission Failed',
-        description: 'Unable to save quotation to storage.',
-        type: 'error',
+        title: "Submission Failed",
+        description: "Unable to save quotation to storage.",
+        type: "error",
       });
       setIsSubmitting(false);
     }
@@ -395,8 +477,14 @@ function NewQuotationForm() {
       {/* Top Breadcrumb & Actions Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div className="flex items-center gap-3">
-          <Link href={requirementId ? `/requirements/${requirementId}` : "/quotes"}>
-            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs text-slate-600">
+          <Link
+            href={requirementId ? `/requirements/${requirementId}` : "/quotes"}
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-xs text-slate-600"
+            >
               <ArrowLeft className="w-3.5 h-3.5" />
               {requirementId ? "Back to Requirement" : "Back to Quotes"}
             </Button>
@@ -407,7 +495,8 @@ function NewQuotationForm() {
               New Commercial Quotation
             </h1>
             <p className="text-xs text-slate-500">
-              Configure multi-line hardware & services proposals with live policy limit checks.
+              Configure multi-line hardware & services proposals with live
+              policy limit checks.
             </p>
           </div>
         </div>
@@ -416,14 +505,14 @@ function NewQuotationForm() {
         <div className="flex items-center gap-2.5">
           <Button
             variant="outline"
-            onClick={() => handleSave('DRAFT')}
+            onClick={() => handleSave("DRAFT")}
             disabled={isSubmitting}
             className="text-xs font-semibold"
           >
             Save as Draft
           </Button>
           <Button
-            onClick={() => handleSave('SUBMIT')}
+            onClick={() => handleSave("SUBMIT")}
             disabled={isSubmitting}
             className="bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-enterprise gap-1.5"
           >
@@ -450,7 +539,10 @@ function NewQuotationForm() {
                 </span>
               </div>
               <p className="text-xs text-slate-700 mt-0.5">
-                Pre-populated from customer intake: <strong>{requirement.customerName}</strong> — {requirement.title} ({requirement.items.length} items requested).
+                Pre-populated from customer intake:{" "}
+                <strong>{requirement.customerName}</strong> —{" "}
+                {requirement.title} ({requirement.items.length} items
+                requested).
               </p>
             </div>
           </div>
@@ -496,7 +588,14 @@ function NewQuotationForm() {
                   </Select>
                   {selectedCustomer && (
                     <p className="text-[11px] text-slate-500 mt-1">
-                      Account Manager: <strong className="text-slate-700">{selectedCustomer.accountManager}</strong> • Credit Limit: <strong className="text-slate-700">{formatCurrency(selectedCustomer.creditLimit)}</strong>
+                      Account Manager:{" "}
+                      <strong className="text-slate-700">
+                        {selectedCustomer.accountManager}
+                      </strong>{" "}
+                      • Credit Limit:{" "}
+                      <strong className="text-slate-700">
+                        {formatCurrency(selectedCustomer.creditLimit)}
+                      </strong>
                     </p>
                   )}
                 </div>
@@ -508,17 +607,22 @@ function NewQuotationForm() {
                   </label>
                   <Select
                     value={priceList}
-                    onChange={(e) => setPriceList(e.target.value as PriceList)}
+                    onChange={(e) => setPriceList(e.target.value)}
                     className="text-xs"
                   >
-                    {PRICE_LISTS.map((pl) => (
-                      <option key={pl} value={pl}>
-                        {pl}
-                      </option>
-                    ))}
+                    <option value="">Default active price list</option>
+                    {pricing
+                      .filter((list) => list.active)
+                      .map((list) => list.name)
+                      .map((pl) => (
+                        <option key={pl} value={pl}>
+                          {pl}
+                        </option>
+                      ))}
                   </Select>
                   <p className="text-[11px] text-slate-500 mt-1">
-                    Standard Enterprise base pricing schedule with category discount boundaries.
+                    Standard Enterprise base pricing schedule with category
+                    discount boundaries.
                   </p>
                 </div>
               </div>
@@ -538,7 +642,7 @@ function NewQuotationForm() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Target Delivery SLA
+                    Quotation valid until
                   </label>
                   <Input
                     type="date"
@@ -560,7 +664,11 @@ function NewQuotationForm() {
                   Quotation Line Items & Policy Limits
                 </CardTitle>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Effective discount limit is strictly calculated as <code className="bg-slate-100 px-1 py-0.5 rounded text-teal-800 font-mono">min(Customer Tier Limit, Category Limit)</code>.
+                  Effective discount limit is strictly calculated as{" "}
+                  <code className="bg-slate-100 px-1 py-0.5 rounded text-teal-800 font-mono">
+                    min(Customer Tier Limit, Category Limit)
+                  </code>
+                  .
                 </p>
               </div>
               <Button
@@ -581,36 +689,56 @@ function NewQuotationForm() {
                     <TableRow className="bg-slate-50 text-[11px] font-semibold text-slate-600">
                       <TableHead className="w-52">Product / Service</TableHead>
                       <TableHead className="w-16 text-center">Qty</TableHead>
-                      <TableHead className="w-24 text-right">Unit Price</TableHead>
-                      <TableHead className="w-40">Discount % & Allowed</TableHead>
-                      <TableHead className="w-24 text-center">Margin %</TableHead>
-                      <TableHead className="w-28 text-center">Policy Status</TableHead>
-                      <TableHead className="w-24 text-right">Line Net</TableHead>
+                      <TableHead className="w-24 text-right">
+                        Unit Price
+                      </TableHead>
+                      <TableHead className="w-40">
+                        Discount % & Allowed
+                      </TableHead>
+                      <TableHead className="w-24 text-center">
+                        Margin %
+                      </TableHead>
+                      <TableHead className="w-28 text-center">
+                        Policy Status
+                      </TableHead>
+                      <TableHead className="w-24 text-right">
+                        Line Net
+                      </TableHead>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {lines.map((line, idx) => {
                       const evalLine = evaluatedLines[idx];
-                      const selectedProd = products.find((p) => p.id === line.productId);
+                      const selectedProd = products.find(
+                        (p) => p.id === line.productId,
+                      );
                       const isViolation = evalLine?.isViolation;
                       const excess = evalLine?.excessPercent || 0;
                       const cost = getProductCost(selectedProd);
-                      const netUnitPrice = line.unitPrice * (1 - line.discountPercent / 100);
-                      const lineMargin = netUnitPrice > 0 ? Math.round(((netUnitPrice - cost) / netUnitPrice) * 100) : 0;
+                      const netUnitPrice =
+                        line.unitPrice * (1 - line.discountPercent / 100);
+                      const lineMargin =
+                        netUnitPrice > 0
+                          ? Math.round(
+                              ((netUnitPrice - cost) / netUnitPrice) * 100,
+                            )
+                          : 0;
 
                       return (
                         <TableRow
                           key={line.tempId}
                           className={`hover:bg-slate-50/70 border-b border-slate-100 ${
-                            isViolation ? 'bg-amber-50/40' : ''
+                            isViolation ? "bg-amber-50/40" : ""
                           }`}
                         >
                           {/* Product Selection */}
                           <TableCell className="align-top py-3">
                             <Select
                               value={line.productId}
-                              onChange={(e) => handleProductChange(line.tempId, e.target.value)}
+                              onChange={(e) =>
+                                handleProductChange(line.tempId, e.target.value)
+                              }
                               className="text-xs h-8"
                             >
                               {products.map((p) => (
@@ -620,7 +748,8 @@ function NewQuotationForm() {
                               ))}
                             </Select>
                             <span className="text-[10px] text-slate-400 block mt-1">
-                              Category: {selectedProd?.category || 'Hardware'} • SKU: {selectedProd?.sku}
+                              Category: {selectedProd?.category || "Hardware"} •
+                              SKU: {selectedProd?.sku}
                             </span>
                           </TableCell>
 
@@ -633,8 +762,8 @@ function NewQuotationForm() {
                               onChange={(e) =>
                                 handleLineFieldChange(
                                   line.tempId,
-                                  'quantity',
-                                  parseInt(e.target.value) || 1
+                                  "quantity",
+                                  parseInt(e.target.value) || 1,
                                 )
                               }
                               className="text-xs h-8 text-center"
@@ -647,17 +776,13 @@ function NewQuotationForm() {
                               type="number"
                               min="0"
                               value={line.unitPrice}
-                              onChange={(e) =>
-                                handleLineFieldChange(
-                                  line.tempId,
-                                  'unitPrice',
-                                  parseFloat(e.target.value) || 0
-                                )
-                              }
+                              readOnly
+                              aria-label="Price from selected price list"
                               className="text-xs h-8 text-right font-mono"
                             />
                             <span className="text-[10px] text-slate-400 block mt-1">
-                              List: {formatCurrency(selectedProd?.basePrice || 0)}
+                              List:{" "}
+                              {formatCurrency(selectedProd?.basePrice || 0)}
                             </span>
                           </TableCell>
 
@@ -673,8 +798,8 @@ function NewQuotationForm() {
                                 onChange={(e) =>
                                   handleLineFieldChange(
                                     line.tempId,
-                                    'discountPercent',
-                                    parseInt(e.target.value) || 0
+                                    "discountPercent",
+                                    parseInt(e.target.value) || 0,
                                   )
                                 }
                                 className="w-20 accent-teal-600 h-1.5 bg-slate-200 rounded cursor-pointer"
@@ -688,25 +813,30 @@ function NewQuotationForm() {
                                   onChange={(e) =>
                                     handleLineFieldChange(
                                       line.tempId,
-                                      'discountPercent',
-                                      parseInt(e.target.value) || 0
+                                      "discountPercent",
+                                      parseInt(e.target.value) || 0,
                                     )
                                   }
                                   className="text-xs h-8 w-12 text-right font-mono"
                                 />
-                                <span className="text-xs font-semibold text-slate-500">%</span>
+                                <span className="text-xs font-semibold text-slate-500">
+                                  %
+                                </span>
                               </div>
                             </div>
                             <div className="flex items-center justify-between text-[10px] mt-1 font-medium">
                               <span className="text-slate-500">
-                                Cap: <strong>{evalLine?.effectiveLimit}%</strong>
+                                Cap:{" "}
+                                <strong>{evalLine?.effectiveLimit}%</strong>
                               </span>
                               {isViolation ? (
                                 <span className="text-rose-700 font-bold">
                                   +{excess}% over
                                 </span>
                               ) : (
-                                <span className="text-emerald-700">Within Policy</span>
+                                <span className="text-emerald-700">
+                                  Within Policy
+                                </span>
                               )}
                             </div>
                           </TableCell>
@@ -714,13 +844,15 @@ function NewQuotationForm() {
                           {/* Line Margin % */}
                           <TableCell className="align-top py-3 text-center">
                             <div className="space-y-0.5">
-                              <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
-                                lineMargin >= 35
-                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                                  : lineMargin >= 25
-                                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                                  : 'bg-rose-50 text-rose-800 border border-rose-200'
-                              }`}>
+                              <span
+                                className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
+                                  lineMargin >= 35
+                                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                    : lineMargin >= 25
+                                      ? "bg-amber-50 text-amber-800 border border-amber-200"
+                                      : "bg-rose-50 text-rose-800 border border-rose-200"
+                                }`}
+                              >
                                 <TrendingUp className="w-2.5 h-2.5" />
                                 {lineMargin}%
                               </span>
@@ -803,7 +935,8 @@ function NewQuotationForm() {
                     Smart Upsell & Cross-Sell Suggestions
                   </CardTitle>
                   <p className="text-[11px] text-slate-500">
-                    Attach high-margin peripherals and service SLAs to optimize deal gross margin and recurring MRR.
+                    Attach high-margin peripherals and service SLAs to optimize
+                    deal gross margin and recurring MRR.
                   </p>
                 </div>
               </div>
@@ -813,8 +946,12 @@ function NewQuotationForm() {
             </CardHeader>
             <CardContent className="p-4 space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {UPSELL_SUGGESTIONS.filter((s) => !dismissedUpsells.includes(s.id)).map((rec) => {
-                  const alreadyInQuote = lines.some((l) => l.productId === rec.productId);
+                {UPSELL_SUGGESTIONS.filter(
+                  (s) => !dismissedUpsells.includes(s.id),
+                ).map((rec) => {
+                  const alreadyInQuote = lines.some(
+                    (l) => l.productId === rec.productId,
+                  );
                   const prod = products.find((p) => p.id === rec.productId);
 
                   return (
@@ -822,8 +959,8 @@ function NewQuotationForm() {
                       key={rec.id}
                       className={`p-3 rounded-lg border text-xs flex flex-col justify-between transition-all ${
                         alreadyInQuote
-                          ? 'bg-emerald-50/50 border-emerald-200'
-                          : 'bg-white border-slate-200 hover:border-teal-300 shadow-2xs'
+                          ? "bg-emerald-50/50 border-emerald-200"
+                          : "bg-white border-slate-200 hover:border-teal-300 shadow-2xs"
                       }`}
                     >
                       <div className="space-y-1.5">
@@ -843,7 +980,9 @@ function NewQuotationForm() {
                             </button>
                           )}
                         </div>
-                        <h4 className="font-bold text-slate-900 leading-snug">{rec.title}</h4>
+                        <h4 className="font-bold text-slate-900 leading-snug">
+                          {rec.title}
+                        </h4>
                         <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
                           {rec.reason}
                         </p>
@@ -889,7 +1028,9 @@ function NewQuotationForm() {
             <CardHeader className="p-4 border-b border-slate-100">
               <CardTitle className="text-sm font-bold text-slate-900 flex items-center justify-between">
                 <span>Financial Summary</span>
-                <span className="text-xs font-normal text-slate-500">USD Net</span>
+                <span className="text-xs font-normal text-slate-500">
+                  USD Net
+                </span>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 space-y-3">
@@ -907,7 +1048,9 @@ function NewQuotationForm() {
               </div>
               <div className="h-px bg-slate-200 my-2" />
               <div className="flex justify-between items-baseline">
-                <span className="text-sm font-bold text-slate-900">Net Grand Total:</span>
+                <span className="text-sm font-bold text-slate-900">
+                  Net Grand Total:
+                </span>
                 <span className="text-xl font-extrabold text-teal-700 font-mono">
                   {formatCurrency(dealEvaluation.grandTotal)}
                 </span>
@@ -916,7 +1059,9 @@ function NewQuotationForm() {
               {/* Deal Health Meter */}
               <div className="pt-3 border-t border-slate-100">
                 <div className="flex justify-between items-center text-xs mb-1">
-                  <span className="font-semibold text-slate-700">Deal Health Score:</span>
+                  <span className="font-semibold text-slate-700">
+                    Deal Health Score:
+                  </span>
                   <span className="font-bold text-slate-900 font-mono">
                     {dealEvaluation.dealHealthScore} / 100
                   </span>
@@ -925,10 +1070,10 @@ function NewQuotationForm() {
                   <div
                     className={`h-full transition-all duration-300 ${
                       dealEvaluation.dealHealthScore >= 80
-                        ? 'bg-emerald-500'
+                        ? "bg-emerald-500"
                         : dealEvaluation.dealHealthScore >= 50
-                        ? 'bg-amber-500'
-                        : 'bg-rose-500'
+                          ? "bg-amber-500"
+                          : "bg-rose-500"
                     }`}
                     style={{ width: `${dealEvaluation.dealHealthScore}%` }}
                   />
@@ -947,26 +1092,36 @@ function NewQuotationForm() {
                       {dealGrossMargin}%
                     </span>
                     <span className="text-[10px] text-slate-400 font-mono">
-                      ({formatCurrency(Math.max(0, dealEvaluation.grandTotal - totalCost))} Profit)
+                      (
+                      {formatCurrency(
+                        Math.max(0, dealEvaluation.grandTotal - totalCost),
+                      )}{" "}
+                      Profit)
                     </span>
                   </div>
                 </div>
                 <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all duration-300 ${
-                      dealGrossMargin >= 35
-                        ? 'bg-teal-600'
+                      dealGrossMargin >= 30
+                        ? "bg-teal-600"
                         : dealGrossMargin >= 25
-                        ? 'bg-amber-500'
-                        : 'bg-rose-500'
+                          ? "bg-amber-500"
+                          : "bg-rose-500"
                     }`}
                     style={{ width: `${Math.min(100, dealGrossMargin)}%` }}
                   />
                 </div>
                 <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                  <span>Target: 35% Preservation</span>
-                  <span className={dealGrossMargin >= 35 ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>
-                    {dealGrossMargin >= 35 ? '✓ Target Met' : '⚠️ Below Target'}
+                  <span>Margin target: 30%</span>
+                  <span
+                    className={
+                      dealGrossMargin >= 35
+                        ? "text-emerald-700 font-bold"
+                        : "text-amber-700 font-bold"
+                    }
+                  >
+                    {dealGrossMargin >= 35 ? "✓ Target Met" : "⚠️ Below Target"}
                   </span>
                 </div>
               </div>
@@ -974,13 +1129,15 @@ function NewQuotationForm() {
           </Card>
 
           {/* Governance Risk Diagnosis Card */}
-          <Card className={`border shadow-enterprise ${
-            dealEvaluation.riskDiagnosis.level === 'LOW'
-              ? 'bg-emerald-50/40 border-emerald-200'
-              : dealEvaluation.riskDiagnosis.level === 'MEDIUM'
-              ? 'bg-amber-50/40 border-amber-200'
-              : 'bg-rose-50/40 border-rose-300'
-          }`}>
+          <Card
+            className={`border shadow-enterprise ${
+              dealEvaluation.riskDiagnosis.level === "LOW"
+                ? "bg-emerald-50/40 border-emerald-200"
+                : dealEvaluation.riskDiagnosis.level === "MEDIUM"
+                  ? "bg-amber-50/40 border-amber-200"
+                  : "bg-rose-50/40 border-rose-300"
+            }`}
+          >
             <CardHeader className="p-4 pb-2 border-b border-slate-200/60 flex-row items-center justify-between space-y-0">
               <CardTitle className="text-xs font-bold text-slate-900 flex items-center gap-1.5 uppercase tracking-wider">
                 <ShieldAlert className="w-4 h-4 text-slate-700" />
@@ -991,16 +1148,24 @@ function NewQuotationForm() {
             <CardContent className="p-4 space-y-3 text-xs">
               <div>
                 <p className="font-bold text-slate-900">1. What happened?</p>
-                <p className="text-slate-600 mt-0.5">{dealEvaluation.riskDiagnosis.whatHappened}</p>
+                <p className="text-slate-600 mt-0.5">
+                  {dealEvaluation.riskDiagnosis.whatHappened}
+                </p>
               </div>
 
               <div>
-                <p className="font-bold text-slate-900">2. Why does it matter?</p>
-                <p className="text-slate-600 mt-0.5">{dealEvaluation.riskDiagnosis.whyItMatters}</p>
+                <p className="font-bold text-slate-900">
+                  2. Why does it matter?
+                </p>
+                <p className="text-slate-600 mt-0.5">
+                  {dealEvaluation.riskDiagnosis.whyItMatters}
+                </p>
               </div>
 
               <div>
-                <p className="font-bold text-slate-900">3. What should you do next?</p>
+                <p className="font-bold text-slate-900">
+                  3. What should you do next?
+                </p>
                 <p className="text-slate-700 font-medium mt-0.5">
                   {dealEvaluation.riskDiagnosis.nextAction}
                 </p>
@@ -1010,7 +1175,9 @@ function NewQuotationForm() {
                 <div className="p-2.5 rounded-md bg-rose-100 border border-rose-200 text-rose-900 text-[11px] font-semibold flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
                   <span>
-                    Submitting this quotation will automatically lock it and escalate to Finance Controller for manual exception approval.
+                    Submitting this quotation will automatically lock it and
+                    escalate to Finance Controller for manual exception
+                    approval.
                   </span>
                 </div>
               )}
@@ -1030,7 +1197,8 @@ function NewQuotationForm() {
               • Services category discount ceiling: <strong>10% max</strong>.
             </p>
             <p className="text-[11px]">
-              • Gold Tier accounts do <strong>NOT</strong> bypass Services 10% ceiling.
+              • Gold Tier accounts do <strong>NOT</strong> bypass Services 10%
+              ceiling.
             </p>
           </div>
         </div>

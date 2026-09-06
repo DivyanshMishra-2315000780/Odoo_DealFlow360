@@ -54,7 +54,7 @@ export default function QuotationDetailPage() {
 
   // Action Dialog State
   const [activeDialog, setActiveDialog] = useState<
-    'APPROVE' | 'REJECT' | 'RETURN' | 'SUBMIT' | 'SEND' | 'CONFIRM' | null
+    'APPROVE' | 'REJECT' | 'RETURN' | 'SUBMIT' | 'SEND' | 'CONFIRM' | 'SUBMIT_REAPPROVAL' | null
   >(null);
   const [actionNote, setActionNote] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -340,6 +340,13 @@ export default function QuotationDetailPage() {
           {/* Negotiation Actions */}
           {isNegotiation && (
             <>
+              <Button
+                onClick={() => setActiveDialog('SUBMIT_REAPPROVAL')}
+                className="bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-xs gap-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Submit for Approval
+              </Button>
               <Link href={`/portal/quotations/${quotation.id}`}>
                 <Button
                   variant="outline"
@@ -686,6 +693,8 @@ export default function QuotationDetailPage() {
                 ? 'Return Quotation for Revision'
                 : activeDialog === 'SUBMIT'
                 ? 'Submit Quotation for Approval'
+                : activeDialog === 'SUBMIT_REAPPROVAL'
+                ? 'Submit Negotiated Quotation for Approval'
                 : activeDialog === 'SEND'
                 ? 'Send Quotation to Client'
                 : 'Confirm & Lock Quotation'}
@@ -701,6 +710,8 @@ export default function QuotationDetailPage() {
                 'Please specify the terms to be modified before returning to the account executive.'}
               {activeDialog === 'SUBMIT' &&
                 'Submit this quotation into the approval workflow. Deals with discount exceptions will automatically escalate to Finance.'}
+              {activeDialog === 'SUBMIT_REAPPROVAL' &&
+                'Submit this counter-offer proposal for commercial and finance re-approval. The deal terms will be evaluated against margin and policy rules.'}
               {activeDialog === 'SEND' &&
                 'Deliver this quotation to the procurement contact. The status will transition to Negotiation.'}
               {activeDialog === 'CONFIRM' &&
@@ -792,12 +803,28 @@ export default function QuotationDetailPage() {
                 </Button>
               )}
 
+              {activeDialog === 'SUBMIT_REAPPROVAL' && (
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    handleExecuteTransition(
+                      'PENDING_APPROVAL',
+                      actionNote || 'Submitted counter-offer terms for approval re-evaluation.'
+                    )
+                  }
+                  loading={isProcessing}
+                  className="bg-teal-600 hover:bg-teal-700 text-white font-semibold"
+                >
+                  Submit for Approval
+                </Button>
+              )}
+
               {activeDialog === 'SEND' && (
                 <Button
                   size="sm"
                   onClick={() =>
                     handleExecuteTransition(
-                      'UNDER_NEGOTIATION',
+                      'SENT',
                       'Quotation dispatched to procurement client.'
                     )
                   }

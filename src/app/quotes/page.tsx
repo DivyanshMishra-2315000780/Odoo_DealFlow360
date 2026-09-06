@@ -162,7 +162,7 @@ export default function QuotesPage() {
     return (
       <ErrorState
         title="Failed to load quotations"
-        message="Could not retrieve the quotations ledger from the mock service layer."
+        message="Could not retrieve the quotations ledger from the server."
         onRetry={() => refetch()}
       />
     );

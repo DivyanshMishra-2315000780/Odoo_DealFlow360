@@ -91,7 +91,7 @@ export default function InvoiceDetailPage({ params }: InvoiceDetailPageProps) {
   const handleOpenPaymentDialog = () => {
     if (isPreShipmentLocked) return;
     setPaymentAmount(remaining.toString());
-    setPaymentReference(`PMT-${Date.now().toString().slice(-6)}`);
+    setPaymentReference('');
     setIsPaymentDialogOpen(true);
   };
 
@@ -237,7 +237,7 @@ export default function InvoiceDetailPage({ params }: InvoiceDetailPageProps) {
           <Button
             size="sm"
             className="text-xs gap-1.5 bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={isPreShipmentLocked || isFullySettled}
+            disabled={isPreShipmentLocked || isFullySettled || !['ADMIN','FINANCE_OFFICER'].includes(user?.role??'')}
             onClick={handleOpenPaymentDialog}
           >
             <CreditCard className="w-3.5 h-3.5" />

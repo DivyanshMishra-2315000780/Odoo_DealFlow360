@@ -264,7 +264,7 @@ export default function CustomersListPage() {
               {(['ALL', 'Gold', 'Silver', 'Bronze'] as const).map((tier) => (
                 <button
                   key={tier}
-                  onClick={() => setSelectedTier(tier as any)}
+                  onClick={() => setSelectedTier(tier as typeof selectedTier)}
                   className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
                     selectedTier === tier
                       ? tier === 'Gold'
@@ -291,7 +291,7 @@ export default function CustomersListPage() {
               ].map((h) => (
                 <button
                   key={h.value}
-                  onClick={() => setHealthFilter(h.value as any)}
+                  onClick={() => setHealthFilter(h.value as typeof healthFilter)}
                   className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
                     healthFilter === h.value
                       ? 'bg-slate-900 text-white'
@@ -312,7 +312,7 @@ export default function CustomersListPage() {
               ].map((s) => (
                 <button
                   key={s.value}
-                  onClick={() => setSubFilter(s.value as any)}
+                  onClick={() => setSubFilter(s.value as typeof subFilter)}
                   className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
                     subFilter === s.value
                       ? 'bg-violet-700 text-white'

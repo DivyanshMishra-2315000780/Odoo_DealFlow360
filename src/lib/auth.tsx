@@ -160,8 +160,9 @@ function backendToFrontendUser(backend: BackendAuthUser, isPendingApproval = fal
 
   return {
     id: backend.userId,
+    sessionId: backend.sessionId,
     customerId: backend.customerId ?? undefined,
-    name: demo?.name ?? `${backend.firstName} ${backend.lastName}`,
+    name: `${backend.firstName} ${backend.lastName}`,
     email: backend.email,
     company: demo?.company ?? 'Enterprise Partner',
     role: normalizeRole(backend.role),
@@ -180,6 +181,7 @@ async function enrichCustomer(user: AuthUser): Promise<AuthUser> {
     const customer = (body.data ?? body).customer;
     return {
       ...user,
+      customerId: customer?.id ?? user.customerId,
       company: customer?.name ?? user.company,
       tier: customer?.tier
         ? (customer.tier.charAt(0) + customer.tier.slice(1).toLowerCase()) as CustomerTier
@@ -373,26 +375,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(updated);
     return updated;
   }, []);
-  const login = useCallback(async (email: string, password: string): Promise<AuthUser> => {
-    const authenticated = await apiLogin(email, password);
-    await queryClient.cancelQueries();
-    queryClient.clear();
-    setUser(authenticated);
-    return authenticated;
-  }, [queryClient]);
-  const signup = useCallback(async (data: { fullName: string; email: string; password: string; company: string }): Promise<AuthUser> => {
-    const [firstName, ...rest] = data.fullName.trim().split(/\s+/);
-    const authenticated = await apiSignup({firstName, lastName: rest.join(' ') || firstName, email: data.email, password: data.password, companyName: data.company});
-    await queryClient.cancelQueries();
-    queryClient.clear();
-    setUser(authenticated);
-    return authenticated;
-  }, [queryClient]);
+
 
   const login = useCallback(
     async (email: string, password: string, overrideUser?: Partial<AuthUser>): Promise<AuthUser> => {
       const authenticated = await apiLogin(email, password);
-      const mergedUser = overrideUser ? { ...authenticated, ...overrideUser } : authenticated;
+      const mergedUser = authenticated;
+      void overrideUser;
       await queryClient.cancelQueries();
       queryClient.clear();
       setUser(mergedUser);
@@ -442,8 +431,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, [queryClient]);
   // A role is determined by the authenticated account. Choose another account by logging in.
-  const switchRole = useCallback(() => { logout(); }, [logout]);
-  return <AuthContext.Provider value={{ user, isLoading, login, switchRole, signup, logout, refreshUser }}>{children}</AuthContext.Provider>;
+
 
   const refreshSession = useCallback(async (): Promise<AuthUser | null> => {
     const refreshed = await apiRefreshToken();
@@ -460,7 +448,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const revokeSession = useCallback(
     async (sessionId: string): Promise<boolean> => {
       const success = await apiRevokeSession(sessionId);
-      if (success && user && user.id === sessionId) {
+      if (success && user && user.sessionId === sessionId) {
         logout();
       }
       return success;
@@ -495,6 +483,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         switchRole,
         signup,
         logout,
+        refreshUser: refreshSession,
         refreshSession,
         getSessions,
         revokeSession,

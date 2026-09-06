@@ -7,7 +7,7 @@ import { customers, fulfillments, products, invoiceLines, invoices, payments, qu
 
 export async function listInvoicesFor(customerId?: string) {
   const query = db.select().from(invoices).orderBy(desc(invoices.createdAt));
-  return customerId ? query.where(eq(invoices.customerId, customerId)) : query;
+  return customerId !== undefined ? query.where(eq(invoices.customerId, customerId)) : query;
 }
 export async function findBilling(orderId: string) {
   const [invoice] = await db.select().from(invoices)
@@ -19,7 +19,8 @@ export async function findBilling(orderId: string) {
   ]);
   const [customer]=await db.select().from(customers).where(eq(customers.id,invoice.customerId)).limit(1);
   const [fulfillment]=invoice.orderId?await db.select().from(fulfillments).where(eq(fulfillments.orderId,invoice.orderId)).limit(1):[];
-  return { invoice, lines, payments: invoicePayments, customer, fulfillment };
+  const [quote]=invoice.quotationId?await db.select({currency:quotations.currency}).from(quotations).where(eq(quotations.id,invoice.quotationId)).limit(1):[];
+  return { invoice:{...invoice,currency:quote?.currency??'USD'}, lines, payments: invoicePayments, customer, fulfillment };
 }
 
 export async function createInvoiceForOrderRecord(orderId: string) {

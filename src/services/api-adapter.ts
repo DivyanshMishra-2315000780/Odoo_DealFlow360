@@ -102,6 +102,7 @@ export function adaptCustomers(rawList: any[]): Customer[] {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function adaptProduct(raw: any): Product {
   return {
+    categoryId:raw.categoryId,baseCost:raw.baseCost==null?undefined:num(raw.baseCost),
     id: raw.id,
     sku: raw.sku ?? '',
     name: raw.name ?? '',
@@ -109,9 +110,9 @@ export function adaptProduct(raw: any): Product {
     basePrice: num(raw.unitPrice ?? raw.basePrice ?? 0),
     currency: raw.currency ?? 'USD',
     description: raw.description ?? '',
-    stockStatus: raw.stockStatus ?? 'IN_STOCK',
+    stockStatus: raw.stockStatus ?? (num(raw.availableStock)===0?'LEAD_TIME_REQUIRED':num(raw.availableStock)<15?'LOW_STOCK':'IN_STOCK'),
     availableStock: raw.availableStock,
-    status: raw.active === false ? 'ARCHIVED' : 'ACTIVE',
+    status: raw.status ?? (raw.active === false ? 'ARCHIVED' : 'ACTIVE'),
     isSubscription: raw.isRecurring ?? false,
     billingFrequency: raw.billingFrequency ?? (raw.isRecurring ? 'MONTHLY' : 'NONE'),
     recurringPrice: num(raw.recurringPrice ?? 0),
@@ -259,10 +260,13 @@ function adaptAuditTrail(rawList: any[]): AuditEntry[] {
 export function adaptInvoice(raw: any): Invoice {
   raw = raw.invoice ? {...raw.invoice, lines:raw.lines, payments:raw.payments, customerName:raw.customer?.name, isShipped:!raw.invoice.orderId || raw.fulfillment?.status === 'DELIVERED'} : raw;
   const amount = num(raw.total ?? raw.totalAmount ?? raw.amount ?? 0);
+  const lastPayment=raw.payments?.find((payment:{status:string})=>payment.status==='SUCCESS');
   const paidAmount = raw.amountDue != null ? amount - num(raw.amountDue) : num(raw.paidAmount);
 
   return {
     id: raw.id ?? raw.invoiceNumber ?? '',
+    invoiceNumber: raw.invoiceNumber,
+    currency: raw.currency ?? 'USD',
     quotationId: raw.quotationId ?? raw.orderId ?? '',
     customerName: raw.customerName ?? '',
     customerId: raw.customerId,
@@ -276,9 +280,9 @@ export function adaptInvoice(raw: any): Invoice {
     dueDate: raw.dueDate ?? '',
     status: (raw.status ?? 'ISSUED') as InvoiceStatus,
     paymentStatus: (raw.paymentStatus ?? (raw.status === 'PAID' ? 'PAID' : 'PENDING')) as PaymentStatus,
-    paymentMethod: raw.paymentMethod,
-    paymentReference: raw.paymentReference,
-    paidAt: raw.paidAt,
+    paymentMethod: raw.paymentMethod ?? lastPayment?.paymentMethod,
+    paymentReference: raw.paymentReference ?? lastPayment?.gatewayReference,
+    paidAt: raw.paidAt ?? lastPayment?.updatedAt,
     lifecycleStage: raw.lifecycleStage ?? (raw.status === 'PAID' ? 'PAID' : 'INVOICED'),
     isShipped: raw.isShipped ?? false,
     shipmentStatus: raw.shipmentStatus ?? 'NOT_SHIPPED',
@@ -314,9 +318,9 @@ export function adaptInvoices(rawList: any[]): Invoice[] {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function adaptFulfillmentOrder(raw: any): FulfillmentOrder {
   if(raw.fulfillment){const items=raw.items??[];raw={...raw.fulfillment,quotationId:raw.quotation.id,customerId:raw.quotation.customerId,customerName:raw.customer?.name,
-    productId:items[0]?.productId,productName:items.map((i:any)=>i.productName).join(', '),orderedQuantity:items.reduce((n:number,i:any)=>n+i.quantity,0),
-    reservedQuantity:raw.allocations?.reduce((n:number,a:any)=>n+a.allocatedQty,0),allocations:raw.allocations,hasBackorder:raw.backorders?.length>0,
-    backorderQuantity:raw.backorders?.reduce((n:number,b:any)=>n+b.backorderedQty,0),primaryWarehouse:raw.allocations?.map((a:any)=>a.warehouseName).join(', ')};}
+    productId:items[0]?.productId,productName:items.map((i:{productName:string})=>i.productName).join(', '),orderedQuantity:items.reduce((n:number,i:{quantity:number})=>n+i.quantity,0),
+    reservedQuantity:raw.allocations?.reduce((n:number,a:{allocatedQty:number})=>n+a.allocatedQty,0),allocations:raw.allocations,hasBackorder:raw.backorders?.length>0,
+    backorderQuantity:raw.backorders?.reduce((n:number,b:{backorderedQty:number})=>n+b.backorderedQty,0),primaryWarehouse:raw.allocations?.map((a:{warehouseName:string})=>a.warehouseName).join(', ')};}
 
   return {
     id: raw.id ?? '',
@@ -500,8 +504,8 @@ export function adaptRuleAuditLogs(rawList: any[]): RuleAuditLogEntry[] {
     category: raw.category ?? 'Customer Tier',
     previousValue: str(raw.previousValue),
     newValue: str(raw.newValue),
-    changedBy: raw.changedBy ?? raw.actorId ?? '',
+    changedBy: raw.changedBy ?? raw.actorRole ?? raw.actorId ?? '',
     timestamp: raw.timestamp ?? raw.createdAt ?? '',
-    reason: raw.reason,
+    reason: raw.reason ?? raw.newValue?.reason,
   }));
 }

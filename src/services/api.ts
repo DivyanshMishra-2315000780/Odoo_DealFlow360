@@ -60,27 +60,7 @@ export const dealflowApi = {
 
   async getProductById(id: string): Promise<Product | null> { return (await this.getProducts()).find(p => p.id === id) ?? null; },
 
-  async saveProduct(product: Product): Promise<Product> {
-    return (async () => {
-        // Determine if this is a create or update
-        const method = product.id ? 'PATCH' : 'POST';
-        const url = product.id
-          ? `/api/admin/products/${product.id}`
-          : '/api/admin/products';
-        return adaptProduct(
-          await apiFetch(url, {
-            method,
-            body: JSON.stringify({
-              sku: product.sku,
-              name: product.name,
-              description: product.description,
-              baseCost: String(product.basePrice),
-              isRecurring: product.isSubscription ?? false,
-            }),
-          })
-        );
-      })();
-  },
+  async saveProduct(product:Product):Promise<Product>{return adaptProduct(await apiFetch('/api/catalog',{method:'POST',body:JSON.stringify({status:product.status,variants:product.variants,id:product.id,name:product.name,sku:product.sku,description:product.description,category:product.category,basePrice:product.basePrice,baseCost:product.baseCost,currency:product.currency,isSubscription:product.isSubscription,billingFrequency:product.billingFrequency,availableStock:product.availableStock})}));},
 
   async deleteProduct(id: string): Promise<boolean> {
     return (async () => {
@@ -109,7 +89,9 @@ export const dealflowApi = {
     const requirement = await this.getRequirementById(quotation.requirementId);
     if (requirement?.status === 'NEW') await this.updateRequirementStatus(quotation.requirementId, 'IN_REVIEW');
   }
-  const body = { customerId: quotation.customerId, quoteRequestId: quotation.requirementId, title: quotation.title, paymentTerms: quotation.notes,
+  const lists=quotation.priceList?await apiFetch<Array<{id:string;name:string;currency:string}>>('/api/pricing'):[];
+  const selectedList=lists.find(list=>list.name===quotation.priceList);
+  const body = { priceListId:selectedList?.id,currency:selectedList?.currency, customerId: quotation.customerId, quoteRequestId: quotation.requirementId, title: quotation.title, validityDate: quotation.deliveryDate, paymentTerms: quotation.notes,
     lines: quotation.items.map(item => ({productId: item.productId, quantity: item.quantity, discountPercentage: item.discountPercent})) };
   const saved = adaptQuotation(await apiFetch('/api/quotes', {method:'POST',body:JSON.stringify(body)}));
   if (quotation.status !== 'DRAFT') return this.updateQuotationStatus(saved.id, 'PENDING_APPROVAL');
@@ -125,6 +107,15 @@ export const dealflowApi = {
     if (!approval) throw new Error('No pending approval is assigned to your role. Earlier approval steps must finish first.');
     const action = status === 'APPROVED' ? 'approve' : status === 'REJECTED' ? 'reject' : 'revision';
     await apiFetch('/api/approvals/'+approval.step.id+'/'+action, {method:'POST', body:JSON.stringify({comment:note})});
+  } else if (current.status === 'UNDER_NEGOTIATION' && status === 'PENDING_APPROVAL') {
+    try {
+      await apiFetch('/api/quotes/' + id + '/negotiate', {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'ACCEPT', comment: note ?? 'Submitted counter-offer for re-approval' }),
+      });
+    } catch {
+      await apiFetch('/api/quotes/' + id + '/submit', { method: 'POST' });
+    }
   } else if (status === 'UNDER_NEGOTIATION') {
     const changes = (meta?.items ?? []).flatMap(item => {
       const prior = current.items.find(line => line.id === item.id);
@@ -305,7 +296,7 @@ export const dealflowApi = {
     password?: string;
     companyName?: string;
   }): Promise<EmployeeUser> {
-    const res = await apiFetch<any>('/api/admin/users', {
+    const res = await apiFetch<EmployeeUser>('/api/admin/users', {
       method: 'POST',
       body: JSON.stringify({
         email: payload.email,
@@ -337,7 +328,7 @@ export const dealflowApi = {
     active?: boolean;
     password?: string;
   }): Promise<EmployeeUser> {
-    const res = await apiFetch<any>(`/api/admin/users/${id}`, {
+    const res = await apiFetch<EmployeeUser>(`/api/admin/users/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     });

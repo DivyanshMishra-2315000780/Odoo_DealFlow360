@@ -27,7 +27,7 @@ export async function findQuoteRequest(id: string) {
 
 export async function listQuoteRequestsFor(customerId: string | null, salesExecId: string | null) {
   const query = db.select().from(quoteRequests).orderBy(desc(quoteRequests.createdAt));
-  if (customerId) return Promise.all((await query.where(eq(quoteRequests.customerId, customerId))).map(row=>findQuoteRequest(row.id)));
+  if (customerId !== null) return Promise.all((await query.where(eq(quoteRequests.customerId, customerId))).map(row=>findQuoteRequest(row.id)));
   if (salesExecId) return Promise.all((await query.where(or(
     eq(quoteRequests.assignedSalesExecId, salesExecId),
     and(eq(quoteRequests.status, 'SUBMITTED'), isNull(quoteRequests.assignedSalesExecId)),

@@ -14,6 +14,7 @@ export type UserRole =
 export type SubscriptionPlan = 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE' | 'NONE';
 
 export interface AuthUser {
+  sessionId?: string;
   customerId?: string;
   id: string;
   name: string;

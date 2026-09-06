@@ -153,7 +153,7 @@ export default function SignupPage() {
     setValue('confirmPassword', 'AcmeCorp2026!');
     toast({
       title: 'Demo Data Prefilled (Customer)',
-      description: 'Acme Corporation credentials filled (System will qualify as Gold Tier).',
+      description: 'Example customer details filled. New customers start on the Bronze tier.',
       type: 'info',
     });
   };

@@ -61,3 +61,12 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Shared responsive and keyboard interaction refinements. */
+html { scroll-behavior: smooth; }
+body { overflow-wrap: break-word; }
+input, select, textarea, button { touch-action: manipulation; }
+textarea { min-height: 7rem; resize: vertical; }
+:focus-visible { outline: 2px solid #0d9488; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+@media print { header, aside, nav, button { display: none !important; } body, main { background: white !important; } main { width: 100% !important; } }

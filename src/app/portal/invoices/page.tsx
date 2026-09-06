@@ -1,207 +1,122 @@
-'use client';
+"use client";
+import { InvoicePayment } from "@/components/payments/invoice-payment";
+import { useInvoices } from "@/hooks/use-dealflow";
+import { PageHeading, MetricCard } from "@/components/ui/page-heading";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
+const money = (amount: number, currency = "USD") =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency }).format(
+    amount,
+  );
+export default function CustomerInvoices() {
+  const query = useInvoices();
 
-import React from 'react';
-import {
-  CreditCard,
-  Download,
-  CheckCircle2,
-  Clock,
-  DollarSign,
-  Building,
-  FileText,
-  Lock,
-} from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { StatusBadge } from '@/components/ui/status-badge';
-import { TierBadge } from '@/components/ui/tier-badge';
-import { useInvoices, useUpdateInvoiceStatus } from '@/hooks/use-dealflow';
-import { useAuth } from '@/lib/auth';
-import { useToast } from '@/components/providers/query-provider';
-import { formatCurrency } from '@/lib/utils';
-
-export default function CustomerInvoicesPage() {
-  const { data: invoices = [], isLoading } = useInvoices();
-  const updateInvoiceStatus = useUpdateInvoiceStatus();
-  const { user } = useAuth();
-  const { toast } = useToast();
-
-  const customerInvoices = React.useMemo(() => {
-    if (!user) return invoices;
-    const compLower = (user.company || '').toLowerCase();
-    const filtered = invoices.filter(
-      (inv) =>
-        (inv.customerId && user.id && inv.customerId === user.customerId) ||
-        (inv.customerName && compLower && inv.customerName.toLowerCase().includes(compLower))
-    );
-    return filtered;
-  }, [invoices, user]);
-
-  const handlePay = async (id: string) => {
-    try {
-      throw new Error('Ask your finance contact to reconcile your payment using the invoice number. Online checkout is not connected.');
-      toast({
-        title: `Invoice ${id} Paid`,
-        description: 'Payment settlement confirmed. Receipt issued to your procurement email.',
-        type: 'success',
-      });
-    } catch {
-      toast({
-        title: 'Payment Failed',
-        type: 'error',
-      });
+  const rows = query.data ?? [];
+  const summary = (field: "remainingAmount" | "paidAmount") => {
+    const amounts = new Map<string, number>();
+    for (const invoice of rows) {
+      if (["DRAFT", "VOID"].includes(invoice.status)) continue;
+      const currency = invoice.currency ?? "USD";
+      amounts.set(
+        currency,
+        (amounts.get(currency) ?? 0) + (invoice[field] ?? 0),
+      );
     }
+    return amounts.size
+      ? [...amounts]
+          .map(([currency, amount]) => money(amount, currency))
+          .join(" / ")
+      : money(0);
   };
-
-  const handleDownload = (id: string) => {
-    toast({
-      title: 'Downloading Invoice',
-      description: `Generating signed PDF for ${id}...`,
-      type: 'info',
-    });
-  };
-
-  const totalOutstanding = customerInvoices
-    .filter((i) => i.status === 'ISSUED')
-    .reduce((acc, i) => acc + i.amount, 0);
-
-  const totalSettled = customerInvoices
-    .filter((i) => i.status === 'PAID')
-    .reduce((acc, i) => acc + i.amount, 0);
-
   return (
-    <div className="space-y-6 pb-12">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-5">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-            Commercial Billing & Invoices
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Track billed contract invoices, settlement receipts, and corporate payment methods.
-          </p>
-        </div>
+    <div className="space-y-7">
+      <PageHeading
+        eyebrow="Billing"
+        title="Your invoices"
+        description="Review issued invoices, recorded payments, and the remaining amount due."
+        actions={
+          <Button variant="outline" onClick={() => window.print()}>
+            Print invoices
+          </Button>
+        }
+      />
+      {query.error && (
+        <p role="alert" className="rounded-lg bg-rose-50 p-4">
+          {query.error.message}
+        </p>
+      )}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <MetricCard
+          label="Outstanding"
+          value={summary("remainingAmount")}
+          note="Remaining balance after recorded payments"
+        />
+        <MetricCard
+          label="Payments recorded"
+          value={summary("paidAmount")}
+          note="Includes partial settlements"
+        />
       </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between text-slate-500">
-              <span className="text-xs font-semibold uppercase tracking-wider">Total Outstanding</span>
-              <div className="p-2 rounded-md bg-amber-50 text-amber-700 shadow-2xs">
-                <Clock className="w-4 h-4" />
+      {rows.map((invoice) => (
+        <Card key={invoice.id}>
+          <CardContent className="p-5 space-y-4">
+            <div className="flex flex-wrap justify-between gap-3">
+              <div>
+                <p className="font-semibold break-all">
+                  Invoice {invoice.invoiceNumber ?? invoice.id}
+                </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Due {new Date(invoice.dueDate).toLocaleDateString()}
+                </p>
               </div>
+              <StatusBadge status={invoice.status} />
             </div>
-            <p className="text-3xl font-bold font-mono text-slate-900 mt-2">
-              {formatCurrency(totalOutstanding)}
-            </p>
-            <p className="text-xs text-slate-500 mt-1">
-              Net 30 commercial payment terms apply
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between text-slate-500">
-              <span className="text-xs font-semibold uppercase tracking-wider">Total Settled</span>
-              <div className="p-2 rounded-md bg-emerald-50 text-emerald-700 shadow-2xs">
-                <CheckCircle2 className="w-4 h-4" />
-              </div>
-            </div>
-            <p className="text-3xl font-bold font-mono text-teal-700 mt-2">
-              {formatCurrency(totalSettled)}
-            </p>
-            <p className="text-xs text-emerald-600 mt-1">
-              All cleared invoices in good standing
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Invoices Table */}
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Invoice ID</TableHead>
-                <TableHead>Deal Reference</TableHead>
-                <TableHead>Billing Account</TableHead>
-                <TableHead>Due Date</TableHead>
-                <TableHead className="text-right">Billed Amount</TableHead>
-                <TableHead>Payment Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {customerInvoices.map((inv) => (
-                <TableRow key={inv.id} className="hover:bg-slate-50/80 transition">
-                  <TableCell>
-                    <span className="font-mono font-bold text-slate-900 text-xs">{inv.id}</span>
-                    <span className="text-[10px] text-slate-400 block font-mono">Issued: {inv.issueDate}</span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-mono text-xs font-semibold text-slate-700">{inv.quotationId}</span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-medium text-slate-800 text-xs block">{inv.customerName}</span>
-                    <TierBadge tier={inv.customerTier} size="sm" />
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-slate-600">
-                    {inv.dueDate}
-                  </TableCell>
-                  <TableCell className="text-right font-mono font-bold text-slate-900 text-sm">
-                    {formatCurrency(inv.amount)}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={inv.status} />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDownload(inv.id)}
-                        className="gap-1 text-xs"
-                      >
-                        <Download className="w-3.5 h-3.5 text-slate-500" />
-                        PDF
-                      </Button>
-                      {inv.status === 'ISSUED' && (
-                        !inv.isShipped ? (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled
-                            className="text-xs opacity-60 cursor-not-allowed gap-1"
-                            title="Payment locked until goods are dispatched from warehouse"
-                          >
-                            <Lock className="w-3.5 h-3.5" />
-                            Pre-Shipment Hold
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => handlePay(inv.id)}
-                            loading={updateInvoiceStatus.isPending}
-                            className="text-xs"
-                          >
-                            Pay Online
-                          </Button>
-                        )
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
+            <div className="space-y-2">
+              {invoice.items?.map((item) => (
+                <div
+                  className="flex justify-between gap-3 text-sm"
+                  key={item.id}
+                >
+                  <span>{item.description}</span>
+                  <span className="shrink-0 font-mono">
+                    {money(item.total, invoice.currency)}
+                  </span>
+                </div>
               ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </div>
+            <div className="flex flex-wrap justify-between gap-3 border-t pt-4">
+              <p>
+                Total {money(invoice.amount, invoice.currency)} | Due{" "}
+                <strong>
+                  {money(invoice.remainingAmount ?? 0, invoice.currency)}
+                </strong>
+              </p>
+            </div>
+            {invoice.paidAmount > 0 && (
+              <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+                <p>
+                  Paid: {money(invoice.paidAmount, invoice.currency)}
+                  {invoice.paymentMethod ? " via " + invoice.paymentMethod : ""}
+                </p>
+                {invoice.paymentReference && (
+                  <p className="mt-1 break-all text-xs">
+                    Reference: {invoice.paymentReference}
+                  </p>
+                )}
+              </div>
+            )}
+            <InvoicePayment invoice={invoice} />
+          </CardContent>
+        </Card>
+      ))}
+      {!rows.length && (
+        <p className="py-8 text-center text-slate-500">
+          {query.isLoading
+            ? "Loading invoices..."
+            : "Invoices appear after delivery is confirmed."}
+        </p>
+      )}
     </div>
   );
 }

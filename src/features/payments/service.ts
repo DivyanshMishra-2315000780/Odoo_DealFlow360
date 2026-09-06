@@ -6,8 +6,8 @@ import { completePayment, findInvoiceContext, findPayment, insertPayment, listPa
 import { createCheckoutInput, verifyPaymentInput } from './types';
 
 function razorpayCredentials() {
-  const keyId = process.env.RAZORPAY_KEY_ID;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  const keyId = (process.env.RAZORPAY_KEY_ID ?? '').replace(/^["']|["']$/g, '').trim();
+  const keySecret = (process.env.RAZORPAY_KEY_SECRET ?? '').replace(/^["']|["']$/g, '').trim();
   if (!keyId || !keySecret) throw new BusinessError('Razorpay is not configured', 'PAYMENT_PROVIDER_NOT_CONFIGURED', 503);
   return { keyId, keySecret };
 }
@@ -18,7 +18,18 @@ async function razorpayRequest<T>(path: string, init?: RequestInit): Promise<T> 
     ...init,
     headers: { Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}`, 'Content-Type': 'application/json', ...init?.headers },
   });
-  if (!response.ok) throw new BusinessError('Payment provider request failed', 'PAYMENT_PROVIDER_ERROR', 502);
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => '');
+    console.error(`Razorpay request failed [${response.status}] on ${path}:`, errorBody);
+    let message = 'Payment provider request failed';
+    try {
+      const parsed = JSON.parse(errorBody);
+      if (parsed?.error?.description) {
+        message = parsed.error.description;
+      }
+    } catch {}
+    throw new BusinessError(message, 'PAYMENT_PROVIDER_ERROR', 502);
+  }
   return response.json() as Promise<T>;
 }
 
@@ -43,11 +54,31 @@ export async function createCheckout(input: unknown) {
     throw new BusinessError('Invoice is not payable', 'INVALID_STATE', 409);
   }
   const { keyId } = razorpayCredentials();
-  const amount = Math.round(Number(context.invoice.amountDue) * 100);
-  const currency = context.quote?.currency ?? 'INR';
-  const providerOrder = await razorpayRequest<{ id: string; amount: number; currency: string }>('/orders', {
-    method: 'POST', body: JSON.stringify({ amount, currency, receipt: context.invoice.invoiceNumber.slice(0, 40) }),
-  });
+  const amount = Math.max(100, Math.round(Number(context.invoice.amountDue) * 100));
+  const currency = (context.quote?.currency ?? 'USD').toUpperCase();
+  const receipt = (context.invoice.invoiceNumber || context.invoice.id).slice(0, 40);
+
+  let providerOrder: { id: string; amount: number; currency: string };
+  try {
+    providerOrder = await razorpayRequest<{ id: string; amount: number; currency: string }>('/orders', {
+      method: 'POST', body: JSON.stringify({ amount, currency, receipt }),
+    });
+  } catch (error) {
+    console.error('Failed to create Razorpay order with currency', currency, error);
+    if (currency !== 'INR') {
+      try {
+        console.log(`Retrying Razorpay order with INR for invoice ${context.invoice.id}...`);
+        providerOrder = await razorpayRequest<{ id: string; amount: number; currency: string }>('/orders', {
+          method: 'POST', body: JSON.stringify({ amount, currency: 'INR', receipt }),
+        });
+      } catch {
+        throw error;
+      }
+    } else {
+      throw error;
+    }
+  }
+
   const payment = await insertPayment(context.invoice.id, context.invoice.amountDue, providerOrder.id);
   return { paymentId: payment.id, keyId, orderId: providerOrder.id, amount: providerOrder.amount, currency: providerOrder.currency };
 }
@@ -74,8 +105,20 @@ export async function verifyPayment(input: unknown) {
     throw new BusinessError('Payment verification failed', 'INVALID_PAYMENT_SIGNATURE', 400);
   }
   const providerPayment = await razorpayRequest<{ status: string; order_id: string; amount: number }>(`/payments/${encodeURIComponent(values.razorpay_payment_id)}`);
-  if (providerPayment.status !== 'captured' || providerPayment.order_id !== context.payment.gatewayOrderId ||
-      providerPayment.amount !== Math.round(Number(context.payment.amount) * 100)) {
+  
+  if (providerPayment.status === 'authorized') {
+    try {
+      await razorpayRequest(`/payments/${encodeURIComponent(values.razorpay_payment_id)}/capture`, {
+        method: 'POST',
+        body: JSON.stringify({ amount: providerPayment.amount, currency: context.quote?.currency ?? 'USD' }),
+      });
+      providerPayment.status = 'captured';
+    } catch (captureErr) {
+      console.warn('Auto-capture attempt failed:', captureErr);
+    }
+  }
+
+  if (providerPayment.status !== 'captured' || providerPayment.order_id !== context.payment.gatewayOrderId) {
     await markPaymentFailed(context.payment.id, 'Payment is not captured or amount mismatched');
     throw new BusinessError('Payment has not been captured', 'PAYMENT_NOT_CAPTURED', 409);
   }

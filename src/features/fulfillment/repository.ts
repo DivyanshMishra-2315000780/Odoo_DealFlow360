@@ -11,7 +11,7 @@ export async function listFulfillmentsFor(customerId?: string) {
     .innerJoin(quotations, eq(fulfillments.quotationId, quotations.id))
     .leftJoin(salesOrders, eq(fulfillments.orderId, salesOrders.id))
     .orderBy(desc(fulfillments.createdAt));
-  return customerId ? query.where(eq(quotations.customerId, customerId)) : query;
+  return customerId !== undefined ? query.where(eq(quotations.customerId, customerId)) : query;
 }
 
 export async function findFulfillment(orderId: string) {

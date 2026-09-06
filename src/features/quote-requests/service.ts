@@ -21,7 +21,7 @@ export async function listQuoteRequests() {
   const user = await requireAuth();
   if (!['CUSTOMER', 'SALES_EXECUTIVE', 'SALES_MANAGER', 'ADMIN'].includes(user.role)) throw new AuthorizationError();
   return listQuoteRequestsFor(
-    user.role === 'CUSTOMER' ? user.customerId : null,
+    user.role === 'CUSTOMER' ? user.customerId ?? '' : null,
     user.role === 'SALES_EXECUTIVE' ? user.userId : null,
   );
 }

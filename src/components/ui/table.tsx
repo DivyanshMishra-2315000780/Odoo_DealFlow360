@@ -3,10 +3,10 @@ import { cn } from '@/lib/utils';
 
 export const Table = forwardRef<HTMLTableElement, HTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => (
-    <div className="relative w-full overflow-auto">
+    <div className="relative w-full min-w-0 overflow-auto overscroll-x-contain">
       <table
         ref={ref}
-        className={cn('w-full caption-bottom text-xs text-left border-collapse', className)}
+        className={cn('w-full caption-bottom text-sm text-left border-collapse', className)}
         {...props}
       />
     </div>
@@ -58,7 +58,7 @@ export const TableHead = forwardRef<HTMLTableCellElement, ThHTMLAttributes<HTMLT
     <th
       ref={ref}
       className={cn(
-        'h-9 px-3.5 text-left align-middle font-semibold text-slate-600 text-[11px] uppercase tracking-wider',
+        'h-11 px-4 text-left align-middle font-semibold text-slate-600 text-[11px] uppercase tracking-wider',
         className
       )}
       {...props}
@@ -71,7 +71,7 @@ export const TableCell = forwardRef<HTMLTableCellElement, TdHTMLAttributes<HTMLT
   ({ className, ...props }, ref) => (
     <td
       ref={ref}
-      className={cn('p-3.5 align-middle text-slate-700', className)}
+      className={cn('p-4 align-middle text-slate-700', className)}
       {...props}
     />
   )

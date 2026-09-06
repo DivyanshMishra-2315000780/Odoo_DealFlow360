@@ -1,99 +1,142 @@
-'use client';
-
-import React, { useEffect, useRef } from 'react';
-import { X } from 'lucide-react';
-import { cn } from '@/lib/utils';
-
+"use client";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+} from "react";
+import { X } from "lucide-react";
+import { cn } from "@/lib/utils";
 export interface DialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   children: React.ReactNode;
 }
-
+const DialogLabel = createContext<string | undefined>(undefined);
 export function Dialog({ open, onOpenChange, children }: DialogProps) {
-  const overlayRef = useRef<HTMLDivElement>(null);
-
+  const panel = useRef<HTMLDivElement>(null);
+  const close = useRef(onOpenChange);
+  const titleId = useId();
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && open) {
-        onOpenChange(false);
+    close.current = onOpenChange;
+  }, [onOpenChange]);
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    panel.current?.focus();
+    const keydown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close.current(false);
+      }
+      if (e.key === "Tab") {
+        const elements = Array.from(
+          panel.current?.querySelectorAll<HTMLElement>(
+            'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]',
+          ) ?? [],
+        ).filter((el) => el.getClientRects().length);
+        const first = elements[0],
+          last = elements[elements.length - 1];
+        if (!first) {
+          e.preventDefault();
+          return;
+        }
+        if (
+          e.shiftKey &&
+          (document.activeElement === first ||
+            document.activeElement === panel.current)
+        ) {
+          e.preventDefault();
+          last.focus();
+        } else if (
+          !e.shiftKey &&
+          (document.activeElement === last ||
+            document.activeElement === panel.current)
+        ) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    if (open) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
+    document.addEventListener("keydown", keydown);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
+      document.removeEventListener("keydown", keydown);
+      document.body.style.overflow = overflow;
+      previous?.focus();
     };
-  }, [open, onOpenChange]);
-
+  }, [open]);
   if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div
-        ref={overlayRef}
-        onClick={() => onOpenChange(false)}
-        className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity animate-in fade-in-0 duration-150"
-      />
-
-      {/* Dialog Frame */}
-      <div className="relative z-50 w-full max-w-lg rounded-lg border border-slate-200 bg-white p-6 shadow-enterprise-lg transition-all animate-in zoom-in-95 duration-150">
-        <button
-          type="button"
+    <DialogLabel.Provider value={titleId}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div
+          aria-hidden="true"
+          className="fixed inset-0 bg-slate-950/50 backdrop-blur-sm"
           onClick={() => onOpenChange(false)}
-          className="absolute right-4 top-4 rounded-sm p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+        />
+        <div
+          ref={panel}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+          className="relative z-50 max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 shadow-xl sm:p-6"
         >
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </button>
-        {children}
+          <button
+            type="button"
+            aria-label="Close dialog"
+            onClick={() => onOpenChange(false)}
+            className="absolute right-3 top-3 rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+          >
+            <X size={18} />
+          </button>
+          {children}
+        </div>
       </div>
-    </div>
+    </DialogLabel.Provider>
   );
 }
-
 export function DialogHeader({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('flex flex-col space-y-1.5 text-left mb-4', className)}
+      className={cn("mb-5 flex flex-col space-y-2 pr-8", className)}
       {...props}
     />
   );
 }
-
 export function DialogTitle({
   className,
   ...props
 }: React.HTMLAttributes<HTMLHeadingElement>) {
+  const id = useContext(DialogLabel);
   return (
     <h2
-      className={cn('text-base font-semibold leading-none text-slate-900 tracking-tight', className)}
+      id={id}
+      className={cn(
+        "text-lg font-semibold tracking-tight text-slate-950",
+        className,
+      )}
       {...props}
     />
   );
 }
-
 export function DialogDescription({
   className,
   ...props
 }: React.HTMLAttributes<HTMLParagraphElement>) {
   return (
     <p
-      className={cn('text-xs text-slate-500 mt-1.5 leading-relaxed', className)}
+      className={cn("text-sm leading-6 text-slate-500", className)}
       {...props}
     />
   );
 }
-
 export function DialogFooter({
   className,
   ...props
@@ -101,8 +144,8 @@ export function DialogFooter({
   return (
     <div
       className={cn(
-        'flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 pt-4 border-t border-slate-100 mt-5',
-        className
+        "mt-5 flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end",
+        className,
       )}
       {...props}
     />

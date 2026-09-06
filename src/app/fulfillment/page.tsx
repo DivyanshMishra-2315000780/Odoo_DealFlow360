@@ -95,7 +95,7 @@ export default function FulfillmentPage() {
     return (
       <ErrorState
         title="Failed to load fulfillment data"
-        message="Unable to retrieve warehouse logistics ledger from the mock service layer."
+        message="Unable to retrieve warehouse logistics ledger from the server."
         onRetry={() => refetch()}
       />
     );

@@ -142,10 +142,10 @@ export default function EmployeesPage() {
       });
       setIsAddModalOpen(false);
       resetAddForm();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
         title: 'Failed to Add Employee',
-        description: err?.response?.data?.message || err?.message || 'An error occurred while creating employee account.',
+        description: (err instanceof Error ? err.message : '') || 'An error occurred while creating employee account.',
         type: 'error',
       });
     }
@@ -183,10 +183,10 @@ export default function EmployeesPage() {
       });
       setIsEditModalOpen(false);
       setSelectedEmployee(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
         title: 'Update Failed',
-        description: err?.response?.data?.message || 'Failed to update employee role.',
+        description: (err instanceof Error ? err.message : '') || 'Failed to update employee role.',
         type: 'error',
       });
     }
@@ -226,10 +226,10 @@ export default function EmployeesPage() {
       }
       setIsDeactivateModalOpen(false);
       setSelectedEmployee(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
         title: 'Status Change Failed',
-        description: err?.response?.data?.message || 'Failed to change account status.',
+        description: (err instanceof Error ? err.message : '') || 'Failed to change account status.',
         type: 'error',
       });
     }

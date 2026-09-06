@@ -118,7 +118,7 @@ export default function NewCustomerRequirementPage() {
     setItems((prev) => prev.filter((it) => it.id !== id));
   };
 
-  const handleItemChange = (id: string, field: keyof FormItem, value: any) => {
+  const handleItemChange = (id: string, field: keyof FormItem, value: string | number) => {
     setItems((prev) =>
       prev.map((it) => (it.id === id ? { ...it, [field]: value } : it))
     );

@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import React, { useState, useMemo, useEffect } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import React, { useState, useMemo, useEffect } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Activity,
   FileText,
@@ -24,7 +24,6 @@ import {
   Search,
   Bell,
   Command,
-
   Menu,
   X,
   ChevronLeft,
@@ -37,12 +36,13 @@ import {
   HelpCircle,
   Inbox,
   ClipboardList,
-} from 'lucide-react';
-import { useToast } from '@/components/providers/query-provider';
-import { useAuth, normalizeRole, getRoleMeta } from '@/lib/auth';
-import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-
+} from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { dealflowApi } from "@/services/api";
+import { useToast } from "@/components/providers/query-provider";
+import { useAuth, normalizeRole, getRoleMeta } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 interface NavItemDef {
   label: string;
@@ -63,64 +63,71 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const { toast } = useToast();
   const { user, isLoading, logout } = useAuth();
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const { data: searchQuotes = [] } = useQuery({
+    queryKey: ["quotations"],
+    queryFn: () => dealflowApi.getQuotations(),
+    enabled: Boolean(user) && !["/login", "/signup"].includes(pathname),
+  });
+  const [searchQuery, setSearchQuery] = useState("");
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [mobileMenuRoute, setMobileMenuRoute] = useState<string | null>(null);
+  const isMobileMenuOpen = mobileMenuRoute === pathname;
+  const setIsMobileMenuOpen = (open: boolean) =>
+    setMobileMenuRoute(open ? pathname : null);
   const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
-  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
+  const [searchDropdownRoute, setSearchDropdownRoute] = useState<string | null>(
+    null,
+  );
+  const isSearchDropdownOpen = searchDropdownRoute === pathname;
+  const setIsSearchDropdownOpen = (open: boolean) =>
+    setSearchDropdownRoute(open ? pathname : null);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (isLoading || pathname === '/login' || pathname === '/signup') return;
-    if (!user) router.replace('/login');
-    else if (user.role === 'CUSTOMER' && !pathname.startsWith('/portal')) router.replace('/portal');
-    else if (user.role !== 'CUSTOMER' && pathname.startsWith('/portal')) router.replace('/');
+    if (isLoading || pathname === "/login" || pathname === "/signup") return;
+    if (!user) router.replace("/login");
+    else if (user.role === "CUSTOMER" && !pathname.startsWith("/portal"))
+      router.replace("/portal");
+    else if (user.role !== "CUSTOMER" && pathname.startsWith("/portal"))
+      router.replace("/");
   }, [isLoading, user, pathname, router]);
   // Keyboard shortcut for Cmd+K / Ctrl+K
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         searchInputRef.current?.focus();
         setIsSearchDropdownOpen(true);
       }
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         setIsSearchDropdownOpen(false);
-        setSearchQuery('');
+        setSearchQuery("");
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   // Filtered search results
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const q = searchQuery.toLowerCase();
-    const searchableItems = [
-      { id: 'Q-1042', title: 'Quotation Q-1042 (Laptop Pro + Onsite Setup)', subtitle: 'Acme Corporation • $3,650.24 • Exception Governance', href: '/quotes/Q-1042', category: 'Deal' },
-      { id: 'Q-1039', title: 'Quotation Q-1039 (Laptop Pro 14)', subtitle: 'Beta Technologies • $14,400.00 • Approved', href: '/quotes/Q-1039', category: 'Deal' },
-      { id: 'Q-1028', title: 'Quotation Q-1028 (Telemetry Workstations)', subtitle: 'Zenith Industries • $15,100.00 • Idle 9 Days', href: '/quotes/Q-1028', category: 'Deal' },
-      { id: 'Q-1052', title: 'Quotation Q-1052 (High Discount Anomaly)', subtitle: 'Delta Solutions • $19,000.00 • +14 pts Excess', href: '/quotes/Q-1052', category: 'Deal' },
-      { id: 'CUST-01', title: 'Acme Corporation (Customer 360)', subtitle: 'Gold Tier (15% Cap) • Strategic Enterprise Account', href: '/customers/CUST-01', category: 'Account' },
-      { id: 'CUST-02', title: 'Beta Technologies (Customer 360)', subtitle: 'Silver Tier (10% Cap) • Cloud Infrastructure Client', href: '/customers/CUST-02', category: 'Account' },
-      { id: 'INV-1042', title: 'Invoice INV-1042 ($3,650.24)', subtitle: 'Acme Corporation • Pre-Shipment Fulfillment Release', href: '/invoices/INV-1042', category: 'Invoice' },
-      { id: 'FUL-801', title: 'Fulfillment Order FUL-801', subtitle: 'Acme Corporation • Main WH (18) + East Depot (6) Split', href: '/fulfillment/FUL-801', category: 'Fulfillment' },
-      { id: 'RULES', title: 'Discount Rules & Policy Caps', subtitle: 'min(Customer Tier, Product Category) Governance Config', href: '/settings/discount-rules', category: 'Settings' },
-      { id: 'HEALTH', title: 'Deal Health & Anomaly Radar', subtitle: 'Deterministic Governance Intelligence & Velocity Watchdog', href: '/deal-health', category: 'Intelligence' },
-      { id: 'REPORTS', title: 'Commercial Revenue Reports', subtitle: 'Pipeline Conversion, MRR Realization & Top Upsells', href: '/reports', category: 'Reports' },
-    ];
+    const searchableItems = searchQuotes.map((q) => ({
+      id: q.id,
+      title: q.title,
+      subtitle: q.customerName + " ? " + q.status.replaceAll("_", " "),
+      href:
+        (user?.role === "CUSTOMER" ? "/portal/quotations/" : "/quotes/") + q.id,
+      category: "Quotation",
+    }));
 
     return searchableItems.filter(
-      (item) => item.title.toLowerCase().includes(q) || item.subtitle.toLowerCase().includes(q) || item.id.toLowerCase().includes(q)
+      (item) =>
+        item.title.toLowerCase().includes(q) ||
+        item.subtitle.toLowerCase().includes(q) ||
+        item.id.toLowerCase().includes(q),
     );
-  }, [searchQuery]);
-
-  // Close mobile menu whenever the route changes
-  useEffect(() => {
-    setIsMobileMenuOpen(false);
-    setIsSearchDropdownOpen(false);
-  }, [pathname]);
+  }, [searchQuery, searchQuotes, user?.role]);
 
   // Active user role normalization
   const currentRole = normalizeRole(user?.role);
@@ -129,275 +136,282 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   // Define role-specific navigation menus
   const roleNavItems: NavItemDef[] = useMemo(() => {
     switch (currentRole) {
-      case 'CUSTOMER':
+      case "CUSTOMER":
         return [
           {
-            label: 'Portal Overview',
-            href: '/portal',
+            label: "Portal Overview",
+            href: "/portal",
             icon: LayoutDashboard,
-            badge: 'Client',
-            tooltip: 'Customer procurement overview, active deals & messages',
+            badge: "Client",
+            tooltip: "Customer procurement overview, active deals & messages",
           },
           {
-            label: 'My Requirements',
-            href: '/portal/requirements',
+            label: "My Requirements",
+            href: "/portal/requirements",
             icon: ClipboardList,
-            badge: 'Intake',
-            tooltip: 'Submit demand requirements for sales executive quotation',
+            badge: "Intake",
+            tooltip: "Submit demand requirements for sales executive quotation",
           },
           {
-            label: 'My Quotations',
-            href: '/portal/quotations',
+            label: "My Quotations",
+            href: "/portal/quotations",
             icon: FileText,
-            badge: 'Live',
-            tooltip: 'Review corporate quotations & submit counter-offers',
+            badge: "Live",
+            tooltip: "Review corporate quotations & submit counter-offers",
           },
           {
-            label: 'Commercial Invoices',
-            href: '/portal/invoices',
+            label: "Commercial Invoices",
+            href: "/portal/invoices",
             icon: CreditCard,
-            tooltip: 'View statements & execute instant online ACH settlements',
+            tooltip: "View statements & execute instant online ACH settlements",
           },
           {
-            label: 'Subscriptions',
-            href: '/portal/profile#subscriptions',
+            label: "Subscriptions",
+            href: "/portal/profile#subscriptions",
             icon: RefreshCcw,
-            tooltip: 'Active SaaS software seats & SLA recurring agreements',
+            tooltip: "Active SaaS software seats & SLA recurring agreements",
           },
           {
-            label: 'Company Profile',
-            href: '/portal/profile',
+            label: "Company Profile",
+            href: "/portal/profile",
             icon: User,
-            tooltip: 'System-assigned customer tier, spend metrics & credit standing',
+            tooltip:
+              "System-assigned customer tier, spend metrics & credit standing",
           },
         ];
 
-      case 'SALES_EXECUTIVE':
+      case "SALES_EXECUTIVE":
         return [
           {
-            label: 'Deal Dashboard',
-            href: '/',
+            label: "Deal Dashboard",
+            href: "/",
             icon: Activity,
-            tooltip: 'Executive pipeline overview & immediate action required',
+            tooltip: "Executive pipeline overview & immediate action required",
           },
           {
-            label: 'Customer Requests',
-            href: '/requirements',
+            label: "Customer Requests",
+            href: "/requirements",
             icon: Inbox,
-            badge: 'Intake',
-            tooltip: 'Incoming customer intake requirements awaiting quotation modeling',
+            badge: "Intake",
+            tooltip:
+              "Incoming customer intake requirements awaiting quotation modeling",
           },
           {
-            label: 'Quotations',
-            href: '/quotes',
+            label: "Quotations",
+            href: "/quotes",
             icon: FileText,
-            badge: 'Live',
-            tooltip: 'Create and track multi-line enterprise quotations',
+            badge: "Live",
+            tooltip: "Create and track multi-line enterprise quotations",
           },
           {
-            label: 'Customers',
-            href: '/customers',
+            label: "Customers",
+            href: "/customers",
             icon: Users,
-            tooltip: 'Customer 360 command center, health gauges & account managers',
+            tooltip:
+              "Customer 360 command center, health gauges & account managers",
           },
           {
-            label: 'Fulfillment',
-            href: '/fulfillment',
+            label: "Fulfillment",
+            href: "/fulfillment",
             icon: Truck,
-            tooltip: 'Warehouse allocation, dispatch readiness & split shipments',
+            tooltip:
+              "Warehouse allocation, dispatch readiness & split shipments",
           },
           {
-            label: 'Subscriptions',
-            href: '/subscriptions',
+            label: "Subscriptions",
+            href: "/subscriptions",
             icon: RefreshCcw,
-            tooltip: 'Commercial subscriptions, multi-year contracts & MRR metrics',
+            tooltip:
+              "Commercial subscriptions, multi-year contracts & MRR metrics",
           },
           {
-            label: 'Invoices',
-            href: '/invoices',
+            label: "Invoices",
+            href: "/invoices",
             icon: CreditCard,
-            tooltip: 'Commercial cashflow ledger & pre-shipment invoice verification',
+            tooltip:
+              "Commercial cashflow ledger & pre-shipment invoice verification",
           },
           {
-            label: 'Deal Health',
-            href: '/deal-health',
+            label: "Deal Health",
+            href: "/deal-health",
             icon: HeartPulse,
             alert: true,
-            tooltip: 'Velocity watchdog: stalled deals, discount anomalies & bottlenecks',
+            tooltip:
+              "Velocity watchdog: stalled deals, discount anomalies & bottlenecks",
           },
         ];
 
-      case 'SALES_MANAGER':
+      case "SALES_MANAGER":
         return [
           {
-            label: 'Deal Dashboard',
-            href: '/',
+            label: "Deal Dashboard",
+            href: "/",
             icon: Activity,
-            tooltip: 'Pipeline governance & commercial deal velocity command center',
+            tooltip:
+              "Pipeline governance & commercial deal velocity command center",
           },
           {
-            label: 'Quotations',
-            href: '/quotes',
+            label: "Quotations",
+            href: "/quotes",
             icon: FileText,
-            badge: 'Live',
-            tooltip: 'All company quotations across sales representatives',
+            badge: "Live",
+            tooltip: "All company quotations across sales representatives",
           },
           {
-            label: 'Discount Approvals',
-            href: '/approvals',
+            label: "Discount Approvals",
+            href: "/approvals",
             icon: ShieldCheck,
             alert: true,
-            tooltip: 'Commercial approval center: evaluate margin exceptions & sign off',
+            tooltip:
+              "Commercial approval center: evaluate margin exceptions & sign off",
           },
           {
-            label: 'Customers',
-            href: '/customers',
+            label: "Customers",
+            href: "/customers",
             icon: Users,
-            tooltip: 'Strategic account governance & customer tier qualification',
+            tooltip:
+              "Strategic account governance & customer tier qualification",
           },
           {
-            label: 'Deal Health',
-            href: '/deal-health',
+            label: "Deal Health",
+            href: "/deal-health",
             icon: HeartPulse,
             alert: true,
-            tooltip: 'Deterministic anomaly radar: stalled velocity & margin leaks',
+            tooltip:
+              "Deterministic anomaly radar: stalled velocity & margin leaks",
           },
           {
-            label: 'Reports & Analytics',
-            href: '/reports',
+            label: "Reports & Analytics",
+            href: "/reports",
             icon: BarChart3,
-            tooltip: 'Pipeline win-rates, SLA turnaround velocity & top upsells',
+            tooltip:
+              "Pipeline win-rates, SLA turnaround velocity & top upsells",
           },
         ];
 
-      case 'FINANCE_OFFICER':
+      case "FINANCE_OFFICER":
         return [
           {
-            label: 'Finance Dashboard',
-            href: '/',
+            label: "Finance Dashboard",
+            href: "/",
             icon: Activity,
-            tooltip: 'Executive financial summary, cash conversion & exceptions',
+            tooltip:
+              "Executive financial summary, cash conversion & exceptions",
           },
           {
-            label: 'Discount Approvals',
-            href: '/approvals',
+            label: "Discount Approvals",
+            href: "/approvals",
             icon: ShieldCheck,
             alert: true,
-            tooltip: 'Critical risk discount sign-offs & gross margin protection',
+            tooltip:
+              "Critical risk discount sign-offs & gross margin protection",
           },
           {
-            label: 'Invoices & Cashflow',
-            href: '/invoices',
+            label: "Invoices & Cashflow",
+            href: "/invoices",
             icon: CreditCard,
-            tooltip: 'Commercial receivables, pre-shipment hold & settlement ledger',
+            tooltip:
+              "Commercial receivables, pre-shipment hold & settlement ledger",
           },
           {
-            label: 'Payments & Settlement',
-            href: '/invoices?tab=settlements',
+            label: "Payments & Settlement",
+            href: "/invoices?tab=settlements",
             icon: DollarSign,
-            tooltip: 'ACH wire receipts, partial payments & reconciled deposits',
+            tooltip:
+              "ACH wire receipts, partial payments & reconciled deposits",
           },
           {
-            label: 'Revenue Reports',
-            href: '/reports',
+            label: "Revenue Reports",
+            href: "/reports",
             icon: BarChart3,
-            tooltip: 'Realized revenue trajectory, MRR run-rate & margin retention',
+            tooltip:
+              "Realized revenue trajectory, MRR run-rate & margin retention",
           },
         ];
 
-      case 'ADMIN':
+      case "ADMIN":
       default:
         return [
           {
-            label: 'Executive Dashboard',
-            href: '/',
+            label: "Executive Dashboard",
+            href: "/",
             icon: Activity,
-            tooltip: 'DealFlow360 platform health & governance overview',
+            tooltip: "DealFlow360 platform health & governance overview",
           },
           {
-            label: 'Customer Accounts',
-            href: '/customers',
+            label: "Customer Accounts",
+            href: "/customers",
             icon: Users,
-            tooltip: 'Enterprise client ledger & system-assigned qualification',
+            tooltip: "Enterprise client ledger & system-assigned qualification",
           },
           {
-            label: 'Product Catalog',
-            href: '/products',
+            label: "Product Catalog",
+            href: "/products",
             icon: Package,
-            tooltip: 'Hardware and service catalog, variant matrix & base prices',
+            tooltip:
+              "Hardware and service catalog, variant matrix & base prices",
           },
           {
-            label: 'Price Lists',
-            href: '/price-lists',
+            label: "Price Lists",
+            href: "/price-lists",
             icon: Tag,
-            tooltip: 'Multi-currency schedules for Bronze, Silver, and Gold tiers',
+            tooltip:
+              "Multi-currency schedules for Bronze, Silver, and Gold tiers",
           },
           {
-            label: 'Commercial Reports',
-            href: '/reports',
+            label: "Commercial Reports",
+            href: "/reports",
             icon: BarChart3,
-            tooltip: 'Aggregate commercial intelligence, pipeline velocity & conversions',
+            tooltip:
+              "Aggregate commercial intelligence, pipeline velocity & conversions",
           },
           {
-            label: 'Discount Rules',
-            href: '/settings/discount-rules',
+            label: "Discount Rules",
+            href: "/settings/discount-rules",
             icon: SlidersHorizontal,
-            badge: 'Admin',
-            tooltip: 'Configure tier discount caps, category ceilings & workflow rules',
+            badge: "Admin",
+            tooltip:
+              "Configure tier discount caps, category ceilings & workflow rules",
           },
           {
-            label: 'Employee Accounts',
-            href: '/settings/employees',
+            label: "Employee Accounts",
+            href: "/settings/employees",
             icon: UserCheck,
-            badge: 'Staff',
-            tooltip: 'Manage enterprise employee roster, roles, credentials & status',
+            badge: "Staff",
+            tooltip:
+              "Manage enterprise employee roster, roles, credentials & status",
           },
         ];
     }
   }, [currentRole]);
 
-  const handleResetData = async () => {
-    try {
-      await resetMutation.mutateAsync();
-      toast({
-        title: 'Data Refreshed',
-        description: 'Latest records have been requested from the server.',
-        type: 'success',
-      });
-    } catch {
-      toast({
-        title: 'Reset Failed',
-        description: 'Unable to clear demo storage.',
-        type: 'error',
-      });
-    }
-  };
-
-  const handleRoleSwitch = (newRole: UserRole) => {
-    switchRole(newRole);
-    setIsRoleDropdownOpen(false);
-    toast({
-      title: 'Sign in to another account',
-      description: 'Access follows the account authenticated by the server.',
-      type: 'info',
-    });
-  };
-
   const workflowSteps = [
-    'Quotation',
-    'Discount Check',
-    'Risk Eval',
-    'Approval',
-    'Negotiation',
-    'Confirmation',
-    'Fulfillment',
-    'Invoice',
-    'Deal Health',
+    "Quotation",
+    "Discount Check",
+    "Risk Eval",
+    "Approval",
+    "Negotiation",
+    "Confirmation",
+    "Fulfillment",
+    "Invoice",
+    "Deal Health",
   ];
 
-  if (pathname !== '/login' && pathname !== '/signup' && (isLoading || !user || (user.role === 'CUSTOMER' && !pathname.startsWith('/portal')) || (user.role !== 'CUSTOMER' && pathname.startsWith('/portal')))) return <div className="p-12 text-center">Loading session...</div>;
+  if (
+    pathname !== "/login" &&
+    pathname !== "/signup" &&
+    (isLoading ||
+      !user ||
+      (user.role === "CUSTOMER" && !pathname.startsWith("/portal")) ||
+      (user.role !== "CUSTOMER" && pathname.startsWith("/portal")))
+  )
+    return <div className="p-12 text-center">Loading session...</div>;
   // Distraction-free full-screen layout for authentication & customer portal pages (placed after all hooks)
-  if (pathname === '/login' || pathname === '/signup' || pathname?.startsWith('/portal')) {
+  if (
+    pathname === "/login" ||
+    pathname === "/signup" ||
+    pathname?.startsWith("/portal")
+  ) {
     return <>{children}</>;
   }
 
@@ -405,20 +419,27 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 selection:bg-teal-100 selection:text-teal-900">
       {/* Top Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-enterprise">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Mobile Menu Trigger & Logo */}
-            <div className="flex items-center gap-3 sm:gap-6">
+            <div className="flex items-center gap-2 sm:gap-6">
               <button
                 type="button"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 className="md:hidden p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition cursor-pointer"
                 aria-label="Toggle navigation drawer"
               >
-                {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                {isMobileMenuOpen ? (
+                  <X className="w-5 h-5" />
+                ) : (
+                  <Menu className="w-5 h-5" />
+                )}
               </button>
 
-              <Link href={currentRole === 'CUSTOMER' ? '/portal' : '/'} className="flex items-center gap-3 group">
+              <Link
+                href={currentRole === "CUSTOMER" ? "/portal" : "/"}
+                className="flex items-center gap-3 group"
+              >
                 <div className="w-9 h-9 rounded-lg bg-teal-600 flex items-center justify-center text-white shadow-enterprise group-hover:bg-teal-700 transition">
                   <Sparkles className="w-5 h-5" />
                 </div>
@@ -427,11 +448,13 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                     <span className="font-bold text-slate-900 tracking-tight text-lg leading-none">
                       DealFlow<span className="text-teal-600">360</span>
                     </span>
-                    <span className="text-[10px] font-semibold uppercase tracking-wider bg-teal-50 text-teal-700 border border-teal-200 px-1.5 py-0.5 rounded">
+                    <span className="hidden lg:inline text-[10px] font-semibold uppercase tracking-wider bg-teal-50 text-teal-700 border border-teal-200 px-1.5 py-0.5 rounded">
                       Enterprise
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 font-normal mt-0.5">B2B Deal Governance & Intelligence</p>
+                  <p className="hidden sm:block text-[11px] text-slate-400 font-normal mt-0.5">
+                    B2B Deal Governance & Intelligence
+                  </p>
                 </div>
               </Link>
             </div>
@@ -443,7 +466,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                 <input
                   ref={searchInputRef}
                   type="text"
-                  placeholder="Search deals (e.g. Q-1042), accounts, rules..."
+                  placeholder="Search quotations or customers..."
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
@@ -467,12 +490,15 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                   <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-lg shadow-enterprise-lg z-50 overflow-hidden max-h-80 overflow-y-auto">
                     <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[11px] font-semibold text-slate-500">
                       <span>Quick Navigation Results</span>
-                      <span className="font-mono text-[10px] text-slate-400">ESC to close</span>
+                      <span className="font-mono text-[10px] text-slate-400">
+                        ESC to close
+                      </span>
                     </div>
 
                     {searchResults.length === 0 ? (
                       <div className="p-4 text-center text-xs text-slate-400">
-                        No deals, accounts, or records matching &ldquo;{searchQuery}&rdquo;
+                        No deals, accounts, or records matching &ldquo;
+                        {searchQuery}&rdquo;
                       </div>
                     ) : (
                       <div className="divide-y divide-slate-100">
@@ -483,7 +509,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                             onClick={() => {
                               router.push(item.href);
                               setIsSearchDropdownOpen(false);
-                              setSearchQuery('');
+                              setSearchQuery("");
                             }}
                             className="w-full text-left px-3.5 py-2.5 hover:bg-teal-50/60 transition flex items-center justify-between group cursor-pointer"
                           >
@@ -491,7 +517,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                               <div className="text-xs font-semibold text-slate-900 group-hover:text-teal-900 flex items-center gap-1.5">
                                 <span>{item.title}</span>
                               </div>
-                              <p className="text-[11px] text-slate-500 truncate">{item.subtitle}</p>
+                              <p className="text-[11px] text-slate-500 truncate">
+                                {item.subtitle}
+                              </p>
                             </div>
                             <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 group-hover:bg-teal-100 group-hover:text-teal-800 shrink-0">
                               {item.category}
@@ -505,69 +533,33 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               )}
             </div>
 
-            {/* Quick Role Switcher Pill & Actions */}
+            {/* Authenticated User Profile & Logout */}
             <div className="flex items-center gap-2 sm:gap-3">
-              {/* Role Switcher Dropdown */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition cursor-pointer shadow-2xs hover:opacity-90 ${roleMeta.badgeClass}`}
-                  title="Click to switch perspective between 5 user roles"
+              <div className="flex items-center gap-2">
+                <div
+                  className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border shadow-2xs ${roleMeta.badgeClass}`}
                 >
-                  <span className={`w-2 h-2 rounded-full ${roleMeta.dotColor}`} />
-                  <span className="hidden sm:inline">{roleMeta.label}</span>
-                  <span className="sm:hidden">{roleMeta.label.split(' ')[0]}</span>
-                  <ChevronDown className="w-3 h-3 text-slate-500" />
-                </button>
-
-                {isRoleDropdownOpen && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-40"
-                      onClick={() => setIsRoleDropdownOpen(false)}
-                    />
-                    <div className="absolute right-0 mt-2 w-64 rounded-lg bg-white border border-slate-200 shadow-enterprise-lg z-50 p-2 text-xs animate-in fade-in-0 zoom-in-95 duration-150">
-                      <div className="px-2.5 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-1">
-                        Switch Demo Role
-                      </div>
-                      {DEMO_ACCOUNTS.map((acc) => {
-                        const isSelected = normalizeRole(acc.role) === currentRole;
-                        return (
-                          <button
-                            key={acc.id}
-                            type="button"
-                            onClick={() => handleRoleSwitch(acc.role as UserRole)}
-                            className={`w-full text-left px-2.5 py-2 rounded-md transition flex flex-col gap-0.5 cursor-pointer ${
-                              isSelected
-                                ? 'bg-teal-50 text-teal-900 font-semibold'
-                                : 'text-slate-700 hover:bg-slate-50'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-slate-900">{acc.roleLabel}</span>
-                              {isSelected && <CheckCircle className="w-3.5 h-3.5 text-teal-600" />}
-                            </div>
-                            <span className="text-[11px] text-slate-500 truncate">{acc.name} • {acc.company}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
+                  <span
+                    className={`w-2 h-2 rounded-full ${roleMeta.dotColor}`}
+                  />
+                  <span>{roleMeta.label}</span>
+                </div>
+                {user?.name && (
+                  <span className="hidden md:inline text-xs text-slate-600 font-medium truncate max-w-[140px]">
+                    {user.name}
+                  </span>
                 )}
               </div>
 
-              {/* Demo Reset */}
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleResetData}
-                loading={resetMutation.isPending}
-                title="Reset local demo data to default state"
-                className="hidden sm:inline-flex text-slate-600 border-slate-300 hover:bg-slate-50"
+                onClick={() => logout()}
+                title="Sign out of your account"
+                className="text-slate-600 border-slate-300 hover:bg-slate-100 hover:text-slate-900 text-xs font-semibold gap-1.5 h-8"
               >
-                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-                <span className="hidden lg:inline">Reset Demo</span>
+                <LogOut className="w-3.5 h-3.5 text-slate-500" />
+                <span className="hidden sm:inline">Logout</span>
               </Button>
 
               <div className="h-5 w-px bg-slate-200 hidden sm:block" />
@@ -575,11 +567,11 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               {/* Notifications */}
               <button
                 type="button"
-                className="relative p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-md transition cursor-pointer"
-                title="Notifications"
+                className="hidden sm:block relative p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-md transition cursor-pointer"
+                title="View audit history"
+                onClick={() => router.push("/deal-health")}
               >
                 <Bell className="w-4 h-4" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
               </button>
 
               <div className="h-5 w-px bg-slate-200 hidden sm:block" />
@@ -593,16 +585,16 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                 <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-semibold text-xs ring-2 ring-teal-500/20 shadow-2xs group-hover:ring-teal-500 transition">
                   {user?.name
                     ? user.name
-                        .split(' ')
+                        .split(" ")
                         .map((n) => n[0])
-                        .join('')
+                        .join("")
                         .substring(0, 2)
                         .toUpperCase()
-                    : 'AP'}
+                    : "AP"}
                 </div>
                 <div className="hidden xl:block text-left">
                   <p className="text-xs font-semibold text-slate-800 leading-none group-hover:text-teal-700 transition">
-                    {user?.name || 'Arthur Pendelton'}
+                    {user?.name || "Arthur Pendelton"}
                   </p>
                   <p className="text-[10px] text-teal-600 font-medium leading-tight mt-0.5">
                     {roleMeta.label}
@@ -615,22 +607,13 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
         {/* B2B Deal Lifecycle Pipeline Tracker */}
         <div className="border-t border-slate-100 bg-slate-50/80 px-4 sm:px-6 lg:px-8 py-2 overflow-x-auto">
-          <div className="max-w-7xl mx-auto flex items-center gap-1.5 text-[11px] text-slate-500 whitespace-nowrap">
+          <div className="max-w-[1536px] mx-auto flex items-center gap-1.5 text-[11px] text-slate-500 whitespace-nowrap">
             <span className="font-semibold text-slate-700 flex items-center gap-1 shrink-0 mr-2 text-xs">
               <Layers className="w-3.5 h-3.5 text-teal-600" /> Deal Lifecycle:
             </span>
             {workflowSteps.map((step, idx) => (
               <React.Fragment key={step}>
-                <span
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1.5 transition ${
-                    idx < 3
-                      ? 'bg-teal-50 text-teal-800 border border-teal-200 shadow-2xs'
-                      : idx === 3
-                      ? 'bg-amber-50 text-amber-900 border border-amber-300 font-semibold shadow-2xs'
-                      : 'text-slate-500 bg-white border border-slate-200/80'
-                  }`}
-                >
-                  {idx < 3 && <CheckCircle className="w-3 h-3 text-teal-600" />}
+                <span className="px-2.5 py-1 rounded-md text-xs font-medium text-slate-500 bg-white border border-slate-200">
                   {step}
                 </span>
                 {idx < workflowSteps.length - 1 && (
@@ -643,11 +626,11 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
       </header>
 
       {/* Main Workspace Container */}
-      <div className="flex-1 flex max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-7 gap-6 lg:gap-8">
+      <div className="flex-1 flex max-w-[1536px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-7 gap-6 lg:gap-8">
         {/* Desktop Navigation Sidebar with Collapse Capability */}
         <aside
           className={`shrink-0 hidden md:block transition-all duration-200 ${
-            isCollapsed ? 'w-18' : 'w-64'
+            isCollapsed ? "w-18" : "w-56"
           }`}
         >
           <div className="sticky top-28 space-y-4">
@@ -664,8 +647,10 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                 type="button"
                 onClick={() => setIsCollapsed(!isCollapsed)}
                 className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 transition cursor-pointer ml-auto"
-                title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar to icons'}
-                aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                title={
+                  isCollapsed ? "Expand sidebar" : "Collapse sidebar to icons"
+                }
+                aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
               >
                 {isCollapsed ? (
                   <ChevronRight className="w-4 h-4" />
@@ -680,11 +665,11 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               {roleNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive =
-                  item.href === '/'
-                    ? pathname === '/'
-                    : item.href.startsWith('/#')
-                    ? pathname === '/'
-                    : pathname.startsWith(item.href.split('?')[0]);
+                  item.href === "/"
+                    ? pathname === "/"
+                    : item.href.startsWith("/#")
+                      ? pathname === "/"
+                      : pathname.startsWith(item.href.split("?")[0]);
 
                 return (
                   <Link
@@ -692,20 +677,26 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                     href={item.href}
                     title={item.tooltip}
                     className={`flex items-center ${
-                      isCollapsed ? 'justify-center px-2 py-2.5' : 'justify-between px-3 py-2'
+                      isCollapsed
+                        ? "justify-center px-2 py-2.5"
+                        : "justify-between px-3 py-2"
                     } text-xs rounded-lg font-medium transition group relative ${
                       isActive
-                        ? 'bg-teal-50 text-teal-900 font-bold border-l-3 border-teal-600 shadow-enterprise'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                        ? "bg-teal-50 text-teal-900 font-bold border-l-3 border-teal-600 shadow-enterprise"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                     }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <Icon
                         className={`w-4 h-4 shrink-0 transition ${
-                          isActive ? 'text-teal-600' : 'text-slate-400 group-hover:text-slate-600'
+                          isActive
+                            ? "text-teal-600"
+                            : "text-slate-400 group-hover:text-slate-600"
                         }`}
                       />
-                      {!isCollapsed && <span className="truncate">{item.label}</span>}
+                      {!isCollapsed && (
+                        <span className="truncate">{item.label}</span>
+                      )}
                     </div>
 
                     {!isCollapsed && item.badge && (
@@ -718,8 +709,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                       <span
                         className={`${
                           isCollapsed
-                            ? 'absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 animate-pulse'
-                            : 'w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0'
+                            ? "absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 animate-pulse"
+                            : "w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0"
                         }`}
                       />
                     )}
@@ -731,7 +722,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             {/* Role Governance Badge & Helper Card (Expanded only) */}
             {!isCollapsed && (
               <div className="pt-4 space-y-3">
-                <div className={`p-3 rounded-lg border text-xs ${roleMeta.badgeClass}`}>
+                <div
+                  className={`p-3 rounded-lg border text-xs ${roleMeta.badgeClass}`}
+                >
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-bold flex items-center gap-1.5">
                       <Shield className="w-3.5 h-3.5" />
@@ -759,15 +752,21 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                   <CardContent className="p-3 pt-2 space-y-1.5 text-xs">
                     <div className="flex justify-between text-[11px] text-slate-600">
                       <span>Hardware:</span>
-                      <strong className="text-slate-800 font-mono">15% Max</strong>
+                      <strong className="text-slate-800 font-mono">
+                        15% Max
+                      </strong>
                     </div>
                     <div className="flex justify-between text-[11px] text-slate-600">
                       <span>Services:</span>
-                      <strong className="text-slate-800 font-mono">10% Max</strong>
+                      <strong className="text-slate-800 font-mono">
+                        10% Max
+                      </strong>
                     </div>
                     <div className="pt-1 border-t border-slate-100 flex justify-between text-[11px] text-slate-600">
                       <span>Formula:</span>
-                      <strong className="text-teal-700 font-mono">min(Tier, Cat)</strong>
+                      <strong className="text-teal-700 font-mono">
+                        min(Tier, Cat)
+                      </strong>
                     </div>
                   </CardContent>
                 </Card>
@@ -793,8 +792,12 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                     <Sparkles className="w-4 h-4" />
                   </div>
                   <div>
-                    <span className="font-bold text-slate-900 text-sm">DealFlow360</span>
-                    <span className="text-[10px] text-teal-600 block font-medium">{roleMeta.label}</span>
+                    <span className="font-bold text-slate-900 text-sm">
+                      DealFlow360
+                    </span>
+                    <span className="text-[10px] text-teal-600 block font-medium">
+                      {roleMeta.label}
+                    </span>
                   </div>
                 </div>
                 <button
@@ -806,27 +809,24 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                 </button>
               </div>
 
-              {/* Mobile Role Switcher */}
-              <div className="py-3 border-b border-slate-100">
-                <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1.5">
-                  Select Role View
+              {/* Mobile Account Info */}
+              <div className="py-3 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                    Current Account
+                  </div>
+                  <div className="text-xs font-semibold text-slate-800 mt-0.5">
+                    {user?.name || "User"}
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {DEMO_ACCOUNTS.map((acc) => (
-                    <button
-                      key={acc.id}
-                      type="button"
-                      onClick={() => handleRoleSwitch(acc.role as UserRole)}
-                      className={`text-left px-2 py-1.5 rounded text-xs transition ${
-                        normalizeRole(acc.role) === currentRole
-                          ? 'bg-teal-600 text-white font-bold'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
-                    >
-                      {acc.roleLabel.split(' ')[0]}
-                    </button>
-                  ))}
-                </div>
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${roleMeta.badgeClass}`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${roleMeta.dotColor}`}
+                  />
+                  {roleMeta.label}
+                </span>
               </div>
 
               {/* Mobile Nav Items */}
@@ -834,11 +834,11 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                 {roleNavItems.map((item) => {
                   const Icon = item.icon;
                   const isActive =
-                    item.href === '/'
-                      ? pathname === '/'
-                      : item.href.startsWith('/#')
-                      ? pathname === '/'
-                      : pathname.startsWith(item.href.split('?')[0]);
+                    item.href === "/"
+                      ? pathname === "/"
+                      : item.href.startsWith("/#")
+                        ? pathname === "/"
+                        : pathname.startsWith(item.href.split("?")[0]);
 
                   return (
                     <Link
@@ -847,12 +847,14 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                       onClick={() => setIsMobileMenuOpen(false)}
                       className={`flex items-center justify-between px-3 py-2.5 text-xs rounded-lg font-medium transition ${
                         isActive
-                          ? 'bg-teal-50 text-teal-900 font-bold border-l-3 border-teal-600'
-                          : 'text-slate-700 hover:bg-slate-100'
+                          ? "bg-teal-50 text-teal-900 font-bold border-l-3 border-teal-600"
+                          : "text-slate-700 hover:bg-slate-100"
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
-                        <Icon className={`w-4 h-4 ${isActive ? 'text-teal-600' : 'text-slate-400'}`} />
+                        <Icon
+                          className={`w-4 h-4 ${isActive ? "text-teal-600" : "text-slate-400"}`}
+                        />
                         <span>{item.label}</span>
                       </div>
                       {item.badge && (
@@ -870,11 +872,11 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleResetData}
-                  className="w-full text-xs justify-center gap-1.5"
+                  onClick={() => logout()}
+                  className="w-full text-xs justify-center gap-1.5 text-rose-600 border-rose-200 hover:bg-rose-50"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  Reset Demo Data
+                  <LogOut className="w-3.5 h-3.5" />
+                  Sign Out
                 </Button>
 
                 <div className="text-[11px] text-slate-400 text-center">

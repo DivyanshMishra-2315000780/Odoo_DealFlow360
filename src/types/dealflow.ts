@@ -67,6 +67,8 @@ export type ProductStatus = 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
 export type ProductBillingFrequency = 'NONE' | 'MONTHLY' | 'QUARTERLY' | 'ANNUAL';
 
 export interface Product {
+  categoryId?: string;
+  baseCost?: number;
   id: string;
   sku: string;
   name: string;
@@ -291,6 +293,8 @@ export interface InvoiceLineItem {
 }
 
 export interface Invoice {
+  invoiceNumber?: string;
+  currency?: string;
   id: string; // e.g. "INV-1042"
   quotationId: string;
   customerName: string;

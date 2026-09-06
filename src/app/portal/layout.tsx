@@ -27,15 +27,15 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   const { toast } = useToast();
   const router = useRouter();
 
-  const customerName = user?.company || 'Acme Corporation';
-  const customerTier = user?.tier || 'Gold';
+  const customerName = user?.company || '';
+  const customerTier = user?.tier || 'Bronze';
 
   const portalNav = [
     { label: 'Overview', href: '/portal', icon: LayoutDashboard },
     { label: 'My Requirements', href: '/portal/requirements', icon: ClipboardList },
     { label: 'My Quotations', href: '/portal/quotations', icon: FileText },
     { label: 'Invoices', href: '/portal/invoices', icon: CreditCard },
-    { label: 'Subscriptions', href: '/portal/profile#subscriptions', icon: RefreshCcw },
+    { label: 'Subscriptions', href: '/portal/subscriptions', icon: RefreshCcw },
     { label: 'Profile', href: '/portal/profile', icon: User },
   ];
 
@@ -101,10 +101,10 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
             {/* Back to Internal Dashboard Button */}
             <div className="flex items-center gap-3">
-              <Link href="/">
+              <Link href="/portal/profile">
                 <Button variant="outline" size="sm" className="gap-1.5 text-xs text-slate-600">
                   <ArrowLeft className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Sales Desk View</span>
+                  <span className="hidden sm:inline">Account</span>
                   <span className="sm:hidden">Exit</span>
                 </Button>
               </Link>
@@ -126,7 +126,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                 <Link
                   key={item.label}
                   href={item.href}
-                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-medium transition ${
+                  className={`shrink-0 flex items-center gap-2 px-3.5 py-2 rounded-md text-xs font-medium transition ${
                     isActive
                       ? 'bg-white text-teal-800 shadow-enterprise font-semibold border border-slate-200'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
