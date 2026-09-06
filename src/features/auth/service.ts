@@ -4,7 +4,7 @@ import { headers } from 'next/headers';
 import { BusinessError } from '@/lib/errors';
 import {
   clearLoginAttempts, findActiveSession, findCustomerByUserId, findLoginAttempt, findRefreshContext, findUserByEmail,
-  findUserSession, insertAuthSession, insertCustomer, insertRefreshToken, insertSignupIdentity, listUserSessions,
+  findUserSession, insertAuthSession, insertCustomer, insertRefreshToken, insertSignupIdentity, insertUser, listUserSessions,
   revokeAuthSession, rotateRefreshToken, saveLoginAttempt,
 } from './repository';
 import {
@@ -54,12 +54,15 @@ export async function login(input: unknown) {
     throw new BusinessError('Too many login attempts. Try again later.', 'LOGIN_RATE_LIMITED', 429);
   }
   const user = await findUserByEmail(credentials.email);
-  if (!user || !user.active || !(await bcrypt.compare(credentials.password, user.passwordHash))) {
+  if (!user || !(await bcrypt.compare(credentials.password, user.passwordHash))) {
     const now = new Date();
     const currentWindow = existingAttempt && now.getTime() - existingAttempt.windowStartedAt.getTime() < 15 * 60 * 1000;
     const attempts = currentWindow ? existingAttempt.attempts + 1 : 1;
     await saveLoginAttempt(identifierHash, attempts, currentWindow ? existingAttempt.windowStartedAt : now, attempts >= 5 ? new Date(now.getTime() + 15 * 60 * 1000) : null);
     throw new BusinessError('Invalid credentials', 'INVALID_CREDENTIALS', 401);
+  }
+  if (!user.active) {
+    throw new BusinessError('Your position is not still decided by the administrator.', 'ACCOUNT_PENDING_APPROVAL', 403);
   }
   await clearLoginAttempts(identifierHash);
   return createLoginSession(user, await findCustomerByUserId(user.id));
@@ -67,6 +70,7 @@ export async function login(input: unknown) {
 
 export async function signup(input: unknown) {
   const values = signupInput.parse(input);
+  const isInternal = values.userType === 'INTERNAL';
   const existingUser = await findUserByEmail(values.email);
   if (existingUser) {
     const existingCustomer = await findCustomerByUserId(existingUser.id);
@@ -81,10 +85,38 @@ export async function signup(input: unknown) {
     return createLoginSession(existingUser, customer);
   }
   const userId = randomUUID();
+  if (isInternal) {
+    // Internal user created with active = false (pending role approval) and default role SALES_EXECUTIVE
+    const user = await insertUser({
+      id: userId,
+      email: values.email,
+      passwordHash: await bcrypt.hash(values.password, 12),
+      firstName: values.firstName,
+      lastName: values.lastName,
+      role: 'SALES_EXECUTIVE',
+      active: false,
+    });
+    return {
+      user: {
+        userId: user.id,
+        customerId: null,
+        email: user.email,
+        role: user.role,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        sessionId: '',
+      },
+      accessToken: '',
+      expiresIn: 0,
+      isPendingApproval: true,
+      message: 'Your position is not still decided by the administrator.',
+    };
+  }
+
   const customerId = randomUUID();
   const identity = await insertSignupIdentity({
     id: userId, email: values.email, passwordHash: await bcrypt.hash(values.password, 12),
-    firstName: values.firstName, lastName: values.lastName, role: 'CUSTOMER',
+    firstName: values.firstName, lastName: values.lastName, role: 'CUSTOMER', active: true,
   }, {
     id: customerId, userId, name: values.companyName ?? `${values.firstName} ${values.lastName}`,
     contactEmail: values.email, tier: 'BRONZE',

@@ -69,13 +69,29 @@ export default function LoginPage() {
         description: `Welcome back, ${user.name} (${user.role.replace(/_/g, ' ')}).`,
         type: 'success',
       });
-      router.push('/');
-    } catch {
-      toast({
-        title: 'Authentication Failed',
-        description: 'Invalid credentials. Please verify your email and password.',
-        type: 'error',
-      });
+      if (user.role === 'CUSTOMER') {
+        router.push('/portal');
+      } else {
+        router.push('/');
+      }
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      if (
+        errorMessage.toLowerCase().includes('position is not still decided') ||
+        errorMessage.toLowerCase().includes('pending approval')
+      ) {
+        toast({
+          title: 'Position Not Decided',
+          description: 'Your position is not still decided by the administrator. Please wait for role assignment.',
+          type: 'warning',
+        });
+      } else {
+        toast({
+          title: 'Authentication Failed',
+          description: errorMessage || 'Invalid credentials. Please verify your email and password.',
+          type: 'error',
+        });
+      }
     }
   };
 

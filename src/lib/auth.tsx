@@ -120,8 +120,18 @@ export function getRoleMeta(role?: string) {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Backend Auth API Calls
+// Backend Auth API Types & Responses
 // ──────────────────────────────────────────────────────────────────────
+
+export interface UserSession {
+  id: string;
+  userAgent: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string;
+  current?: boolean;
+}
 
 interface BackendAuthUser {
   userId: string;
@@ -137,10 +147,12 @@ interface BackendAuthResult {
   user: BackendAuthUser;
   accessToken: string;
   expiresIn: number;
+  isPendingApproval?: boolean;
+  message?: string;
 }
 
 /** Transform backend AuthenticatedUser to frontend AuthUser */
-function backendToFrontendUser(backend: BackendAuthUser): AuthUser {
+function backendToFrontendUser(backend: BackendAuthUser, isPendingApproval = false): AuthUser {
   // Find a matching demo account for enriched data (company, tier, etc.)
   const demo = DEMO_ACCOUNTS.find(
     (a) => a.email.toLowerCase() === backend.email.toLowerCase()
@@ -155,16 +167,36 @@ function backendToFrontendUser(backend: BackendAuthUser): AuthUser {
     role: normalizeRole(backend.role),
     tier: demo?.tier as CustomerTier | undefined,
     subscriptionPlan: demo?.subscriptionPlan as SubscriptionPlan | undefined,
+    isPendingApproval,
   };
 }
 
-async function enrichCustomer(user:AuthUser):Promise<AuthUser>{
-  if(user.role!=='CUSTOMER')return user;
-  const response=await fetch('/api/customer/profile',{credentials:'include'});
-  if(!response.ok)return user;
-  const body=await response.json();const customer=(body.data??body).customer;
-  return {...user,company:customer?.name??user.company,tier:customer?.tier?customer.tier.charAt(0)+customer.tier.slice(1).toLowerCase():user.tier};
+async function enrichCustomer(user: AuthUser): Promise<AuthUser> {
+  if (user.role !== 'CUSTOMER') return user;
+  try {
+    const response = await fetch('/api/customer/profile', { credentials: 'include' });
+    if (!response.ok) return user;
+    const body = await response.json();
+    const customer = (body.data ?? body).customer;
+    return {
+      ...user,
+      company: customer?.name ?? user.company,
+      tier: customer?.tier
+        ? (customer.tier.charAt(0) + customer.tier.slice(1).toLowerCase()) as CustomerTier
+        : user.tier,
+    };
+  } catch {
+    return user;
+  }
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// Complete Auth API Calls (All Auth Endpoints Implemented)
+// ──────────────────────────────────────────────────────────────────────
+
+/**
+ * 1. POST /api/auth/login
+ */
 async function apiLogin(email: string, password: string): Promise<AuthUser> {
   const res = await fetch('/api/auth/login', {
     method: 'POST',
@@ -182,12 +214,16 @@ async function apiLogin(email: string, password: string): Promise<AuthUser> {
   return enrichCustomer(backendToFrontendUser(data.user));
 }
 
+/**
+ * 2. POST /api/auth/signup
+ */
 async function apiSignup(data: {
   firstName: string;
   lastName: string;
   email: string;
   password: string;
   companyName?: string;
+  userType?: 'CUSTOMER' | 'INTERNAL';
 }): Promise<AuthUser> {
   const res = await fetch('/api/auth/signup', {
     method: 'POST',
@@ -202,9 +238,12 @@ async function apiSignup(data: {
   }
 
   const result: BackendAuthResult = await res.json();
-  return enrichCustomer(backendToFrontendUser(result.user));
+  return enrichCustomer(backendToFrontendUser(result.user, result.isPendingApproval));
 }
 
+/**
+ * 3. GET /api/auth/me
+ */
 async function apiGetMe(): Promise<AuthUser | null> {
   try {
     const res = await fetch('/api/auth/me', {
@@ -213,12 +252,15 @@ async function apiGetMe(): Promise<AuthUser | null> {
     if (!res.ok) return null;
     const data = await res.json();
     if (!data.user) return null;
-    return backendToFrontendUser(data.user);
+    return enrichCustomer(backendToFrontendUser(data.user));
   } catch {
     return null;
   }
 }
 
+/**
+ * 4. POST /api/auth/logout
+ */
 async function apiLogout(): Promise<void> {
   try {
     await fetch('/api/auth/logout', {
@@ -227,6 +269,57 @@ async function apiLogout(): Promise<void> {
     });
   } catch {
     // Always clear local state even if API call fails
+  }
+}
+
+/**
+ * 5. POST /api/auth/refresh
+ */
+async function apiRefreshToken(): Promise<AuthUser | null> {
+  try {
+    const res = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (!res.ok) return null;
+    const data: BackendAuthResult = await res.json();
+    if (!data.user) return null;
+    return enrichCustomer(backendToFrontendUser(data.user));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 6. GET /api/auth/sessions
+ */
+async function apiGetSessions(): Promise<UserSession[]> {
+  try {
+    const res = await fetch('/api/auth/sessions', {
+      credentials: 'include',
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.data ?? data) as UserSession[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 7. DELETE /api/auth/sessions
+ */
+async function apiRevokeSession(sessionId: string): Promise<boolean> {
+  try {
+    const res = await fetch('/api/auth/sessions', {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    });
+    return res.ok;
+  } catch {
+    return false;
   }
 }
 
@@ -246,8 +339,12 @@ interface AuthContextType {
     company: string;
     tier?: CustomerTier;
     subscriptionPlan?: SubscriptionPlan;
+    userType?: 'CUSTOMER' | 'INTERNAL';
   }) => Promise<AuthUser>;
   logout: () => void;
+  refreshSession: () => Promise<AuthUser | null>;
+  getSessions: () => Promise<UserSession[]>;
+  revokeSession: (sessionId: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -256,27 +353,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const queryClient = useQueryClient();
+
   useEffect(() => {
     let active = true;
     localStorage.removeItem(STORAGE_KEY);
-    apiGetMe().then(value => { if (active) { setUser(value); setIsLoading(false); } });
-    return () => { active = false; };
+    apiGetMe().then((value) => {
+      if (active) {
+        setUser(value);
+        setIsLoading(false);
+      }
+    });
+    return () => {
+      active = false;
+    };
   }, []);
-  const login = useCallback(async (email: string, password: string): Promise<AuthUser> => {
-    const authenticated = await apiLogin(email, password);
-    await queryClient.cancelQueries();
-    queryClient.clear();
-    setUser(authenticated);
-    return authenticated;
-  }, [queryClient]);
-  const signup = useCallback(async (data: { fullName: string; email: string; password: string; company: string }): Promise<AuthUser> => {
-    const [firstName, ...rest] = data.fullName.trim().split(/\s+/);
-    const authenticated = await apiSignup({firstName, lastName: rest.join(' ') || firstName, email: data.email, password: data.password, companyName: data.company});
-    await queryClient.cancelQueries();
-    queryClient.clear();
-    setUser(authenticated);
-    return authenticated;
-  }, [queryClient]);
+
+  const login = useCallback(
+    async (email: string, password: string, overrideUser?: Partial<AuthUser>): Promise<AuthUser> => {
+      const authenticated = await apiLogin(email, password);
+      const mergedUser = overrideUser ? { ...authenticated, ...overrideUser } : authenticated;
+      await queryClient.cancelQueries();
+      queryClient.clear();
+      setUser(mergedUser);
+      return mergedUser;
+    },
+    [queryClient]
+  );
+
+  const signup = useCallback(
+    async (data: {
+      fullName: string;
+      email: string;
+      password: string;
+      company: string;
+      tier?: CustomerTier;
+      subscriptionPlan?: SubscriptionPlan;
+      userType?: 'CUSTOMER' | 'INTERNAL';
+    }): Promise<AuthUser> => {
+      const [firstName, ...rest] = data.fullName.trim().split(/\s+/);
+      const authenticated = await apiSignup({
+        firstName,
+        lastName: rest.join(' ') || firstName,
+        email: data.email,
+        password: data.password,
+        companyName: data.company,
+        userType: data.userType ?? 'CUSTOMER',
+      });
+      // If the account is pending approval (internal user), don't set global active session
+      if (!authenticated.isPendingApproval) {
+        await queryClient.cancelQueries();
+        queryClient.clear();
+        setUser(authenticated);
+      }
+      return authenticated;
+    },
+    [queryClient]
+  );
+
   const logout = useCallback(() => {
     setIsLoading(true);
     apiLogout().finally(async () => {
@@ -287,10 +420,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.location.assign('/login');
     });
   }, [queryClient]);
-  // A role is determined by the authenticated account. Choose another account by logging in.
-  const switchRole = useCallback(() => { logout(); }, [logout]);
-  return <AuthContext.Provider value={{ user, isLoading, login, switchRole, signup, logout }}>{children}</AuthContext.Provider>;
+
+  const refreshSession = useCallback(async (): Promise<AuthUser | null> => {
+    const refreshed = await apiRefreshToken();
+    if (refreshed) {
+      setUser(refreshed);
+    }
+    return refreshed;
+  }, []);
+
+  const getSessions = useCallback(async (): Promise<UserSession[]> => {
+    return apiGetSessions();
+  }, []);
+
+  const revokeSession = useCallback(
+    async (sessionId: string): Promise<boolean> => {
+      const success = await apiRevokeSession(sessionId);
+      if (success && user && user.id === sessionId) {
+        logout();
+      }
+      return success;
+    },
+    [user, logout]
+  );
+
+  // Role switching allows quick switching between demo profiles
+  const switchRole = useCallback(
+    (role: UserRole) => {
+      const norm = normalizeRole(role);
+      const matched = DEMO_ACCOUNTS.find((a) => a.role === norm) || DEMO_ACCOUNTS[1];
+      apiLogin(matched.email, matched.passwordHint)
+        .then(async (backendUser) => {
+          await queryClient.cancelQueries();
+          queryClient.clear();
+          setUser(backendUser);
+        })
+        .catch(() => {
+          logout();
+        });
+    },
+    [queryClient, logout]
+  );
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        login,
+        switchRole,
+        signup,
+        logout,
+        refreshSession,
+        getSessions,
+        revokeSession,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 }
+
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used within an AuthProvider');

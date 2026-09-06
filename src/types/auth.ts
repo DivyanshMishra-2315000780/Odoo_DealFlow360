@@ -22,4 +22,5 @@ export interface AuthUser {
   role: UserRole;
   tier?: CustomerTier;
   subscriptionPlan?: SubscriptionPlan;
+  isPendingApproval?: boolean;
 }

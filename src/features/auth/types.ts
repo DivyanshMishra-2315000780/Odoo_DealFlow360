@@ -12,6 +12,7 @@ export const signupInput = z.object({
     .regex(/[^A-Za-z0-9]/, 'Password must contain a special character'),
   firstName: z.string().trim().min(1), lastName: z.string().trim().min(1),
   companyName: z.string().trim().min(1).optional(),
+  userType: z.enum(['CUSTOMER', 'INTERNAL']).optional(),
 }).strict();
 export const revokeSessionInput = z.object({ sessionId: z.string().uuid() }).strict();
 

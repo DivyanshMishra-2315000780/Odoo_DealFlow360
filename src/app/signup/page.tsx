@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { CustomerTier } from '@/types/dealflow';
 import { SubscriptionPlan } from '@/types/auth';
@@ -33,17 +34,24 @@ const signupSchema = z
   .object({
     fullName: z.string().min(2, 'Full Name must be at least 2 characters'),
     email: z.email('Please enter a valid business email address'),
-    company: z.string().min(2, 'Company name is required'),
-    password: z.string().min(10).max(128)
-        .regex(/[a-z]/, 'Password must contain a lowercase letter')
-        .regex(/[A-Z]/, 'Password must contain an uppercase letter')
-        .regex(/[0-9]/, 'Password must contain a number')
-        .regex(/[^A-Za-z0-9]/, 'Password must contain a special character'),
-    confirmPassword: z.string().min(10).max(128)
-        .regex(/[a-z]/, 'Password must contain a lowercase letter')
-        .regex(/[A-Z]/, 'Password must contain an uppercase letter')
-        .regex(/[0-9]/, 'Password must contain a number')
-        .regex(/[^A-Za-z0-9]/, 'Password must contain a special character'),
+    company: z.string().min(2, 'Company or department name is required'),
+    userType: z.enum(['CUSTOMER', 'INTERNAL']),
+    password: z
+      .string()
+      .min(10, 'Password must be at least 10 characters')
+      .max(128)
+      .regex(/[a-z]/, 'Password must contain a lowercase letter')
+      .regex(/[A-Z]/, 'Password must contain an uppercase letter')
+      .regex(/[0-9]/, 'Password must contain a number')
+      .regex(/[^A-Za-z0-9]/, 'Password must contain a special character'),
+    confirmPassword: z
+      .string()
+      .min(10, 'Password must be at least 10 characters')
+      .max(128)
+      .regex(/[a-z]/, 'Password must contain a lowercase letter')
+      .regex(/[A-Z]/, 'Password must contain an uppercase letter')
+      .regex(/[0-9]/, 'Password must contain a number')
+      .regex(/[^A-Za-z0-9]/, 'Password must contain a special character'),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: 'Passwords do not match',
@@ -120,6 +128,7 @@ export default function SignupPage() {
     register,
     handleSubmit,
     setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
@@ -127,20 +136,38 @@ export default function SignupPage() {
       fullName: '',
       email: '',
       company: '',
+      userType: 'CUSTOMER',
       password: '',
       confirmPassword: '',
     },
   });
 
+  const userType = watch('userType');
+
   const handleQuickFillAcme = () => {
     setValue('fullName', 'Sarah Jenkins');
     setValue('email', 's.jenkins@acmecorp.com');
     setValue('company', 'Acme Corporation');
-    setValue('password', 'acme123');
-    setValue('confirmPassword', 'acme123');
+    setValue('userType', 'CUSTOMER');
+    setValue('password', 'AcmeCorp2026!');
+    setValue('confirmPassword', 'AcmeCorp2026!');
     toast({
-      title: 'Demo Data Prefilled',
+      title: 'Demo Data Prefilled (Customer)',
       description: 'Acme Corporation credentials filled (System will qualify as Gold Tier).',
+      type: 'info',
+    });
+  };
+
+  const handleQuickFillInternal = () => {
+    setValue('fullName', 'Rohan Sharma');
+    setValue('email', 'rohan.sharma@dealflow360.com');
+    setValue('company', 'DealFlow360 Enterprise');
+    setValue('userType', 'INTERNAL');
+    setValue('password', 'InternalUser2026!');
+    setValue('confirmPassword', 'InternalUser2026!');
+    toast({
+      title: 'Demo Data Prefilled (Internal User)',
+      description: 'Internal employee credentials filled (Requires administrator approval).',
       type: 'info',
     });
   };
@@ -152,21 +179,31 @@ export default function SignupPage() {
         email: values.email,
         company: values.company,
         password: values.password,
-        tier:'Bronze',
-        subscriptionPlan: selectedPlan,
+        userType: values.userType,
+        tier: 'Bronze',
+        subscriptionPlan: values.userType === 'CUSTOMER' ? selectedPlan : 'NONE',
       });
 
-      toast({
-        title: 'Account Registered',
-        description: `Welcome to DealFlow360, ${user.name}. ${user.company} initialized under ${user.tier} Tier governance.`,
-        type: 'success',
-      });
-
-      router.push('/portal');
-    } catch {
+      if (user.isPendingApproval) {
+        toast({
+          title: 'Registration Submitted',
+          description: 'Your position is not still decided by the administrator. Please wait for admin approval before logging in.',
+          type: 'warning',
+        });
+        router.push('/login');
+      } else {
+        toast({
+          title: 'Account Registered',
+          description: `Welcome to DealFlow360, ${user.name}. ${user.company} initialized under ${user.tier} Tier governance.`,
+          type: 'success',
+        });
+        router.push('/portal');
+      }
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Unable to complete registration. Please verify details.';
       toast({
         title: 'Registration Error',
-        description: 'Unable to complete registration. Please verify details.',
+        description: errorMessage,
         type: 'error',
       });
     }
@@ -202,22 +239,33 @@ export default function SignupPage() {
           </p>
         </div>
 
-        {/* Quick-Fill Demo Helper */}
+        {/* Quick-Fill Demo Helpers */}
         <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-teal-50 border border-teal-200 rounded-lg shadow-2xs">
           <div className="flex items-center gap-2">
             <span className="flex h-2 w-2 rounded-full bg-teal-600 animate-ping" />
             <p className="text-xs font-semibold text-teal-950">
-              Demo Fast-Track: Register as Acme Corporation (Gold Tier)
+              Demo Fast-Track: Select account profile to prefill
             </p>
           </div>
-          <Button
-            type="button"
-            size="sm"
-            onClick={handleQuickFillAcme}
-            className="bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold shadow-enterprise shrink-0"
-          >
-            ⚡ 1-Click Demo Fill (Acme Corp • Gold)
-          </Button>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleQuickFillAcme}
+              className="bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold shadow-enterprise"
+            >
+              ⚡ 1-Click Customer (Acme Corp • Gold)
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleQuickFillInternal}
+              className="border-teal-700 text-teal-800 hover:bg-teal-100/70 text-xs font-semibold bg-white"
+            >
+              ⚡ 1-Click Internal User (Pending Review)
+            </Button>
+          </div>
         </div>
 
         {/* Signup Form Container */}
@@ -232,6 +280,40 @@ export default function SignupPage() {
             </CardHeader>
             <CardContent className="p-5 pt-3 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Account Type Selection */}
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Account Type <span className="text-rose-500">*</span>
+                  </label>
+                  <Select
+                    {...register('userType')}
+                    className="text-xs font-medium"
+                  >
+                    <option value="CUSTOMER">Customer (Client Procurement & Self-Service Portal)</option>
+                    <option value="INTERNAL">Internal User (Sales / Finance / Deal Desk Operations)</option>
+                  </Select>
+                  <p className="text-[11px] text-slate-500">
+                    {userType === 'INTERNAL'
+                      ? 'Internal employee accounts require administrator approval before role assignment & active access.'
+                      : 'Client procurement accounts qualify for tier discount governance and immediate portal access.'}
+                  </p>
+                </div>
+
+                {/* Internal User Notice */}
+                {userType === 'INTERNAL' && (
+                  <div className="sm:col-span-2 p-3.5 rounded-lg border border-amber-200 bg-amber-50/70 text-xs text-amber-950 flex items-start gap-2.5 shadow-2xs">
+                    <Info className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                    <div className="leading-relaxed space-y-1">
+                      <p className="font-semibold text-amber-900">
+                        Internal Account Authorization Required
+                      </p>
+                      <p className="text-amber-800">
+                        Internal accounts are registered with pending status (defaulting to Sales Executive). Until an administrator approves and assigns your position, login attempts will inform you that your position is not still decided.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Full Name */}
                 <div className="space-y-1">
                   <label className="block text-xs font-semibold text-slate-700">
@@ -273,15 +355,15 @@ export default function SignupPage() {
                 </div>
 
                 {/* Company Name */}
-                <div className="space-y-1">
+                <div className="space-y-1 sm:col-span-2">
                   <label className="block text-xs font-semibold text-slate-700">
-                    Company / Organization
+                    {userType === 'INTERNAL' ? 'Department / Business Unit' : 'Company / Organization'}
                   </label>
                   <div className="relative">
                     <Building className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                     <Input
                       type="text"
-                      placeholder="e.g. Acme Corporation"
+                      placeholder={userType === 'INTERNAL' ? 'e.g. Enterprise Deal Desk / Sales Ops' : 'e.g. Acme Corporation'}
                       className="pl-9"
                       error={Boolean(errors.company)}
                       {...register('company')}
@@ -291,9 +373,6 @@ export default function SignupPage() {
                     <p className="text-[11px] text-rose-600">{errors.company.message}</p>
                   )}
                 </div>
-
-                {/* Blank col for symmetry on sm screens */}
-                <div className="hidden sm:block" />
 
                 {/* Password */}
                 <div className="space-y-1">
@@ -354,202 +433,253 @@ export default function SignupPage() {
             </CardContent>
           </Card>
 
-          {/* SECTION 2: Commercial Tier Governance */}
-          <Card>
-            <CardHeader className="p-5 pb-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <CardTitle className="text-sm uppercase tracking-wider flex items-center gap-2 text-slate-800">
-                    <Award className="w-4 h-4 text-teal-600" />
-                    2. System-Assigned Commercial Tier Qualification
-                  </CardTitle>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Customer Tiers govern maximum discount ceilings and are evaluated automatically by the DealFlow360 qualification matrix.
-                  </p>
-                </div>
-                <span className="text-xs font-semibold font-mono bg-teal-50 text-teal-700 px-2 py-0.5 rounded border border-teal-200">
-                  System Automated
-                </span>
-              </div>
-            </CardHeader>
-            <CardContent className="p-5 pt-3 space-y-4">
-              <div className="p-3.5 rounded-lg border border-teal-200 bg-teal-50/50 text-xs text-teal-950 flex items-start gap-2.5 shadow-2xs">
-                <Info className="w-4 h-4 text-teal-700 shrink-0 mt-0.5" />
-                <div className="leading-relaxed space-y-1">
-                  <p>
-                    <strong>Automatic Tier Assignment:</strong> New client organizations initialize at <strong>Bronze Tier (5% cap)</strong>. Verified accounts with spend history (such as Acme Corporation) are automatically recognized as <strong>Gold Tier (15% hardware cap)</strong>.
-                  </p>
-                  <p className="text-[11px] text-teal-900 font-medium">
-                    ⚠️ Mandatory Governance: Customer Gold Tier never bypasses approval rules. Services are strictly capped at 10% regardless of tier.
-                  </p>
-                </div>
-              </div>
+          {/* SECTION 2 & 3: Shown for CUSTOMER */}
+          {userType === 'CUSTOMER' ? (
+            <>
+              {/* SECTION 2: Commercial Tier Governance */}
+              <Card>
+                <CardHeader className="p-5 pb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <CardTitle className="text-sm uppercase tracking-wider flex items-center gap-2 text-slate-800">
+                        <Award className="w-4 h-4 text-teal-600" />
+                        2. System-Assigned Commercial Tier Qualification
+                      </CardTitle>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Customer Tiers govern maximum discount ceilings and are evaluated automatically by the DealFlow360 qualification matrix.
+                      </p>
+                    </div>
+                    <span className="text-xs font-semibold font-mono bg-teal-50 text-teal-700 px-2 py-0.5 rounded border border-teal-200">
+                      System Automated
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-5 pt-3 space-y-4">
+                  <div className="p-3.5 rounded-lg border border-teal-200 bg-teal-50/50 text-xs text-teal-950 flex items-start gap-2.5 shadow-2xs">
+                    <Info className="w-4 h-4 text-teal-700 shrink-0 mt-0.5" />
+                    <div className="leading-relaxed space-y-1">
+                      <p>
+                        <strong>Automatic Tier Assignment:</strong> New client organizations initialize at <strong>Bronze Tier (5% cap)</strong>. Verified accounts with spend history (such as Acme Corporation) are automatically recognized as <strong>Gold Tier (15% hardware cap)</strong>.
+                      </p>
+                      <p className="text-[11px] text-teal-900 font-medium">
+                        ⚠️ Mandatory Governance: Customer Gold Tier never bypasses approval rules. Services are strictly capped at 10% regardless of tier.
+                      </p>
+                    </div>
+                  </div>
 
-              {/* Tier Qualification Matrix Grid - Informational */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-                {/* Bronze Card */}
-                <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/50 text-left relative">
-                  <div className="flex items-center justify-between">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-900 border border-orange-200">
-                      <Shield className="w-3.5 h-3.5 text-orange-600" />
-                      Bronze Tier
-                    </span>
-                    <span className="font-mono text-xs font-bold text-teal-900">
-                      5% Max Cap
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-2.5 leading-relaxed">
-                    Default introductory tier for new registrations without prior historical enterprise spend.
-                  </p>
-                  <div className="mt-3 text-[11px] text-slate-500 font-mono">
-                    Criteria: Standard Onboarding
-                  </div>
-                </div>
-
-                {/* Silver Card */}
-                <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/50 text-left relative">
-                  <div className="flex items-center justify-between">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-200 text-slate-800">
-                      <Award className="w-3.5 h-3.5 text-slate-600" />
-                      Silver Tier
-                    </span>
-                    <span className="font-mono text-xs font-semibold text-slate-700">
-                      10% Max Cap
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-2.5 leading-relaxed">
-                    Unlocked for mid-market accounts with $100k+ annual volume and credit score of A or above.
-                  </p>
-                  <div className="mt-3 text-[11px] text-slate-500 font-mono">
-                    Criteria: $100k+ spend & A credit
-                  </div>
-                </div>
-
-                {/* Gold Card */}
-                <div className="p-4 rounded-lg border border-amber-200 bg-amber-50/30 text-left relative">
-                  <div className="flex items-center justify-between">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-900 border border-amber-300">
-                      <Crown className="w-3.5 h-3.5 text-amber-600" />
-                      Gold Tier
-                    </span>
-                    <span className="font-mono text-xs font-semibold text-amber-900">
-                      15% Max Cap
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-2.5 leading-relaxed">
-                    Premier tier for accounts with $300k+ volume (e.g. Acme Corp). 15% hardware ceiling, 10% services ceiling.
-                  </p>
-                  <div className="mt-3 text-[11px] text-amber-900 font-mono font-medium">
-                    Criteria: $300k+ spend & AAA credit
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* SECTION 3: Subscription Selection with Valid Skip Option (Separate Concern) */}
-          <Card>
-            <CardHeader className="p-5 pb-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <CardTitle className="text-sm uppercase tracking-wider flex items-center gap-2 text-slate-800">
-                    <Sparkles className="w-4 h-4 text-teal-600" />
-                    3. Software Subscription Plan (Separate Concern)
-                  </CardTitle>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Governs SaaS platform seats, SLA guarantees, and deal desk features.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedPlan('NONE')}
-                  className={`text-xs px-3 py-1.5 rounded-md font-semibold border transition cursor-pointer ${
-                    selectedPlan === 'NONE'
-                      ? 'bg-slate-900 text-white border-slate-900 shadow-enterprise'
-                      : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
-                  }`}
-                >
-                  ✓ Skip Subscription (Free Trial)
-                </button>
-              </div>
-            </CardHeader>
-            <CardContent className="p-5 pt-3 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {SUBSCRIPTION_PLANS.map((plan) => {
-                  const isSelected = selectedPlan === plan.id;
-                  return (
-                    <div
-                      key={plan.id}
-                      onClick={() => setSelectedPlan(plan.id)}
-                      className={`flex flex-col justify-between p-5 rounded-lg border text-left transition cursor-pointer relative ${
-                        isSelected
-                          ? 'border-teal-600 bg-teal-50/20 ring-2 ring-teal-500/20 shadow-enterprise'
-                          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
-                      }`}
-                    >
-                      {plan.popular && (
-                        <div className="absolute -top-2.5 right-4 bg-teal-600 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shadow-2xs">
-                          Most Popular
-                        </div>
-                      )}
-                      <div>
-                        <h4 className="font-bold text-slate-900 text-sm">{plan.title}</h4>
-                        <div className="mt-2 flex items-baseline">
-                          <span className="text-2xl font-bold font-mono text-slate-900">
-                            {plan.price}
-                          </span>
-                          <span className="text-xs text-slate-500 ml-1">{plan.period}</span>
-                        </div>
-                        <p className="text-xs text-slate-500 mt-2">{plan.description}</p>
-                        <div className="my-4 border-t border-slate-100" />
-                        <ul className="space-y-2 text-xs text-slate-600">
-                          {plan.features.map((feat) => (
-                            <li key={feat} className="flex items-start gap-2">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
-                              <span className="text-[11px] leading-tight">{feat}</span>
-                            </li>
-                          ))}
-                        </ul>
+                  {/* Tier Qualification Matrix Grid - Informational */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+                    {/* Bronze Card */}
+                    <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/50 text-left relative">
+                      <div className="flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-900 border border-orange-200">
+                          <Shield className="w-3.5 h-3.5 text-orange-600" />
+                          Bronze Tier
+                        </span>
+                        <span className="font-mono text-xs font-bold text-teal-900">
+                          5% Max Cap
+                        </span>
                       </div>
-
-                      <div className="pt-4">
-                        <Button
-                          type="button"
-                          variant={isSelected ? 'default' : 'outline'}
-                          size="sm"
-                          className="w-full text-xs"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedPlan(plan.id);
-                          }}
-                        >
-                          {isSelected ? '✓ Selected' : 'Select Plan'}
-                        </Button>
+                      <p className="text-xs text-slate-600 mt-2.5 leading-relaxed">
+                        Default introductory tier for new registrations without prior historical enterprise spend.
+                      </p>
+                      <div className="mt-3 text-[11px] text-slate-500 font-mono">
+                        Criteria: Standard Onboarding
                       </div>
                     </div>
-                  );
-                })}
-              </div>
 
-              {selectedPlan === 'NONE' && (
-                <div className="p-3 rounded-lg border border-slate-200 bg-slate-100/70 text-xs text-slate-600 flex items-center justify-between">
-                  <span>
-                    <strong>Subscription skipped.</strong> You will be provisioned on the standard 14-day DealFlow360 trial.
+                    {/* Silver Card */}
+                    <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/50 text-left relative">
+                      <div className="flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-200 text-slate-800">
+                          <Award className="w-3.5 h-3.5 text-slate-600" />
+                          Silver Tier
+                        </span>
+                        <span className="font-mono text-xs font-semibold text-slate-700">
+                          10% Max Cap
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 mt-2.5 leading-relaxed">
+                        Unlocked for mid-market accounts with $100k+ annual volume and credit score of A or above.
+                      </p>
+                      <div className="mt-3 text-[11px] text-slate-500 font-mono">
+                        Criteria: $100k+ spend & A credit
+                      </div>
+                    </div>
+
+                    {/* Gold Card */}
+                    <div className="p-4 rounded-lg border border-amber-200 bg-amber-50/30 text-left relative">
+                      <div className="flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-900 border border-amber-300">
+                          <Crown className="w-3.5 h-3.5 text-amber-600" />
+                          Gold Tier
+                        </span>
+                        <span className="font-mono text-xs font-semibold text-amber-900">
+                          15% Max Cap
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 mt-2.5 leading-relaxed">
+                        Premier tier for accounts with $300k+ volume (e.g. Acme Corp). 15% hardware ceiling, 10% services ceiling.
+                      </p>
+                      <div className="mt-3 text-[11px] text-amber-900 font-mono font-medium">
+                        Criteria: $300k+ spend & AAA credit
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* SECTION 3: Subscription Selection with Valid Skip Option */}
+              <Card>
+                <CardHeader className="p-5 pb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <CardTitle className="text-sm uppercase tracking-wider flex items-center gap-2 text-slate-800">
+                        <Sparkles className="w-4 h-4 text-teal-600" />
+                        3. Software Subscription Plan (Separate Concern)
+                      </CardTitle>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Governs SaaS platform seats, SLA guarantees, and deal desk features.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPlan('NONE')}
+                      className={`text-xs px-3 py-1.5 rounded-md font-semibold border transition cursor-pointer ${
+                        selectedPlan === 'NONE'
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-enterprise'
+                          : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
+                      }`}
+                    >
+                      ✓ Skip Subscription (Free Trial)
+                    </button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-5 pt-3 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {SUBSCRIPTION_PLANS.map((plan) => {
+                      const isSelected = selectedPlan === plan.id;
+                      return (
+                        <div
+                          key={plan.id}
+                          onClick={() => setSelectedPlan(plan.id)}
+                          className={`flex flex-col justify-between p-5 rounded-lg border text-left transition cursor-pointer relative ${
+                            isSelected
+                              ? 'border-teal-600 bg-teal-50/20 ring-2 ring-teal-500/20 shadow-enterprise'
+                              : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          {plan.popular && (
+                            <div className="absolute -top-2.5 right-4 bg-teal-600 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shadow-2xs">
+                              Most Popular
+                            </div>
+                          )}
+                          <div>
+                            <h4 className="font-bold text-slate-900 text-sm">{plan.title}</h4>
+                            <div className="mt-2 flex items-baseline">
+                              <span className="text-2xl font-bold font-mono text-slate-900">
+                                {plan.price}
+                              </span>
+                              <span className="text-xs text-slate-500 ml-1">{plan.period}</span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-2">{plan.description}</p>
+                            <div className="my-4 border-t border-slate-100" />
+                            <ul className="space-y-2 text-xs text-slate-600">
+                              {plan.features.map((feat) => (
+                                <li key={feat} className="flex items-start gap-2">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
+                                  <span className="text-[11px] leading-tight">{feat}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          <div className="pt-4">
+                            <Button
+                              type="button"
+                              variant={isSelected ? 'default' : 'outline'}
+                              size="sm"
+                              className="w-full text-xs"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedPlan(plan.id);
+                              }}
+                            >
+                              {isSelected ? '✓ Selected' : 'Select Plan'}
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {selectedPlan === 'NONE' && (
+                    <div className="p-3 rounded-lg border border-slate-200 bg-slate-100/70 text-xs text-slate-600 flex items-center justify-between">
+                      <span>
+                        <strong>Subscription skipped.</strong> You will be provisioned on the standard 14-day DealFlow360 trial.
+                      </span>
+                      <span className="font-semibold text-slate-800">No payment method required</span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            /* INTERNAL USER WORKFLOW CARD */
+            <Card className="border-amber-200 bg-amber-50/20">
+              <CardHeader className="p-5 pb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-sm uppercase tracking-wider flex items-center gap-2 text-slate-800">
+                      <Shield className="w-4 h-4 text-amber-600" />
+                      2. Internal Role Provisioning & Approval Architecture
+                    </CardTitle>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Internal deal operations accounts require administrative review for commercial permission levels.
+                    </p>
+                  </div>
+                  <span className="text-xs font-semibold font-mono bg-amber-100 text-amber-900 px-2 py-0.5 rounded border border-amber-300">
+                    Pending Admin Assignment
                   </span>
-                  <span className="font-semibold text-slate-800">No payment method required</span>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardHeader>
+              <CardContent className="p-5 pt-3 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-lg border border-slate-200 bg-white text-left shadow-2xs">
+                    <span className="text-xs font-bold text-slate-900 block">1. Initial State</span>
+                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                      Your account is created with default designation as <strong>Sales Executive</strong> in an inactive authorization state.
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-lg border border-slate-200 bg-white text-left shadow-2xs">
+                    <span className="text-xs font-bold text-slate-900 block">2. Login Governance</span>
+                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                      Attempting to sign in while pending displays: <em>&quot;Your position is not still decided by the administrator.&quot;</em>
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-lg border border-slate-200 bg-white text-left shadow-2xs">
+                    <span className="text-xs font-bold text-slate-900 block">3. Role Activation</span>
+                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                      The administrator assigns your operational role (Sales Manager, Executive, Finance Officer, or Admin) to grant full access.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Final Submit Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-lg border border-slate-200 bg-white shadow-enterprise">
             <div>
               <p className="text-xs font-semibold text-slate-800">
-                Ready to deploy your deal governance center?
+                {userType === 'INTERNAL'
+                  ? 'Ready to submit your internal account request?'
+                  : 'Ready to deploy your deal governance center?'}
               </p>
               <p className="text-[11px] text-slate-500">
-                By registering, your account is enrolled under DealFlow360 governance rules. Commercial tier re-evaluations occur quarterly.
+                {userType === 'INTERNAL'
+                  ? 'Your account will be queued for role assignment and active commercial desk clearance.'
+                  : 'By registering, your account is enrolled under DealFlow360 governance rules. Commercial tier re-evaluations occur quarterly.'}
               </p>
             </div>
 
@@ -560,7 +690,9 @@ export default function SignupPage() {
               loading={isSubmitting}
               className="text-xs font-semibold shadow-enterprise shrink-0"
             >
-              Complete Registration & Access Dashboard
+              {userType === 'INTERNAL'
+                ? 'Submit Internal Account for Review'
+                : 'Complete Registration & Access Portal'}
               <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
           </div>
