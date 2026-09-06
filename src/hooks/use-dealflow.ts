@@ -17,6 +17,7 @@ import {
   RequirementItem,
   RequirementPriority,
   RequirementStatus,
+  EmployeeUser,
 } from '@/types/dealflow';
 
 // ──────────────────────────────────────────────────────────────────────
@@ -47,6 +48,8 @@ export const QUERY_KEYS = {
   APPROVALS: ['approvals'],
   APPROVAL: (id: string) => ['approvals', id],
   NOTIFICATIONS: ['notifications'],
+  EMPLOYEES: ['employees'],
+  EMPLOYEE: (id: string) => ['employees', id],
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -434,6 +437,66 @@ export function useUpdateRequirementStatus() {
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.REQUIREMENTS });
       queryClient.setQueryData(QUERY_KEYS.REQUIREMENT(updated.id), updated);
+    },
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Employee Accounts Queries & Mutations
+// ──────────────────────────────────────────────────────────────────────
+
+export function useEmployees() {
+  return useQuery({
+    queryKey: QUERY_KEYS.EMPLOYEES,
+    queryFn: () => dealflowApi.getEmployees(),
+  });
+}
+
+export function useCreateEmployee() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      email: string;
+      firstName: string;
+      lastName: string;
+      role: 'ADMIN' | 'SALES_MANAGER' | 'SALES_EXECUTIVE' | 'FINANCE_OFFICER' | 'CUSTOMER';
+      password?: string;
+      companyName?: string;
+    }) => dealflowApi.createEmployee(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.EMPLOYEES });
+    },
+  });
+}
+
+export function useUpdateEmployee() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: string;
+      payload: {
+        role?: 'ADMIN' | 'SALES_MANAGER' | 'SALES_EXECUTIVE' | 'FINANCE_OFFICER' | 'CUSTOMER';
+        firstName?: string;
+        lastName?: string;
+        active?: boolean;
+        password?: string;
+      };
+    }) => dealflowApi.updateEmployee(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.EMPLOYEES });
+    },
+  });
+}
+
+export function useDeleteEmployee() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => dealflowApi.removeEmployee(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.EMPLOYEES });
     },
   });
 }

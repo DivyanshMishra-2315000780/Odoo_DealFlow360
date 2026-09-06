@@ -248,6 +248,7 @@ interface AuthContextType {
     subscriptionPlan?: SubscriptionPlan;
   }) => Promise<AuthUser>;
   logout: () => void;
+  refreshUser: () => Promise<AuthUser | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -261,6 +262,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(STORAGE_KEY);
     apiGetMe().then(value => { if (active) { setUser(value); setIsLoading(false); } });
     return () => { active = false; };
+  }, []);
+  const refreshUser = useCallback(async () => {
+    const updated = await apiGetMe();
+    setUser(updated);
+    return updated;
   }, []);
   const login = useCallback(async (email: string, password: string): Promise<AuthUser> => {
     const authenticated = await apiLogin(email, password);
@@ -289,7 +295,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [queryClient]);
   // A role is determined by the authenticated account. Choose another account by logging in.
   const switchRole = useCallback(() => { logout(); }, [logout]);
-  return <AuthContext.Provider value={{ user, isLoading, login, switchRole, signup, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, isLoading, login, switchRole, signup, logout, refreshUser }}>{children}</AuthContext.Provider>;
 }
 export function useAuth() {
   const context = useContext(AuthContext);

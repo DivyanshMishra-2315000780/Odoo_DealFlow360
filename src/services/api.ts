@@ -22,6 +22,7 @@ import {
   RequirementItem,
   RequirementPriority,
   RequirementStatus,
+  EmployeeUser,
 } from '@/types/dealflow';
 import {
   adaptCustomer,
@@ -270,6 +271,95 @@ export const dealflowApi = {
   // Quotation creation and customer acceptance own the later requirement transitions.
   return adaptRequirement(await apiFetch('/api/quote-requests/'+id));
 },
+
+  // ─── Employee & User Management ───────────────────────────────
+  async getEmployees(): Promise<EmployeeUser[]> {
+    const raw = await apiFetch<Array<{
+      id: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+      role: 'ADMIN' | 'SALES_MANAGER' | 'SALES_EXECUTIVE' | 'FINANCE_OFFICER' | 'CUSTOMER';
+      active: boolean;
+      createdAt: string;
+      updatedAt?: string;
+    }>>('/api/admin/users');
+    return (raw ?? []).map(u => ({
+      id: u.id,
+      email: u.email,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      role: u.role,
+      active: u.active ?? true,
+      department: u.role === 'FINANCE_OFFICER' ? 'Finance & Risk' : u.role === 'ADMIN' ? 'System Operations' : u.role === 'SALES_MANAGER' ? 'Commercial Deal Desk' : u.role === 'SALES_EXECUTIVE' ? 'Enterprise Sales' : 'Client Account',
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt,
+    }));
+  },
+
+  async createEmployee(payload: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: 'ADMIN' | 'SALES_MANAGER' | 'SALES_EXECUTIVE' | 'FINANCE_OFFICER' | 'CUSTOMER';
+    password?: string;
+    companyName?: string;
+  }): Promise<EmployeeUser> {
+    const res = await apiFetch<any>('/api/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: payload.email,
+        firstName: payload.firstName,
+        lastName: payload.lastName,
+        role: payload.role,
+        password: payload.password || 'TemporaryPass123!',
+        companyName: payload.companyName || 'DealFlow360 Internal',
+        active: true,
+      }),
+    });
+    return {
+      id: res.id,
+      email: res.email,
+      firstName: res.firstName,
+      lastName: res.lastName,
+      role: res.role,
+      active: res.active ?? true,
+      department: res.role === 'FINANCE_OFFICER' ? 'Finance & Risk' : res.role === 'ADMIN' ? 'System Operations' : res.role === 'SALES_MANAGER' ? 'Commercial Deal Desk' : 'Enterprise Sales',
+      createdAt: res.createdAt,
+      updatedAt: res.updatedAt,
+    };
+  },
+
+  async updateEmployee(id: string, payload: {
+    role?: 'ADMIN' | 'SALES_MANAGER' | 'SALES_EXECUTIVE' | 'FINANCE_OFFICER' | 'CUSTOMER';
+    firstName?: string;
+    lastName?: string;
+    active?: boolean;
+    password?: string;
+  }): Promise<EmployeeUser> {
+    const res = await apiFetch<any>(`/api/admin/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    return {
+      id: res.id,
+      email: res.email,
+      firstName: res.firstName,
+      lastName: res.lastName,
+      role: res.role,
+      active: res.active ?? true,
+      department: res.role === 'FINANCE_OFFICER' ? 'Finance & Risk' : res.role === 'ADMIN' ? 'System Operations' : res.role === 'SALES_MANAGER' ? 'Commercial Deal Desk' : 'Enterprise Sales',
+      createdAt: res.createdAt,
+      updatedAt: res.updatedAt,
+    };
+  },
+
+  async removeEmployee(id: string): Promise<boolean> {
+    await apiFetch(`/api/admin/users/${id}`, {
+      method: 'DELETE',
+    });
+    return true;
+  },
 
   // ─── System Utility ──────────────────────────────────────────────
   async resetDemoData():Promise<{success:boolean}> {return {success:true};},
