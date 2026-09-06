@@ -10,38 +10,105 @@ import {
   CheckCircle2,
   ArrowLeft,
   Building,
-  Calendar,
   AlertTriangle,
-  Sparkles,
   Info,
-  Shield,
   Layers,
   Send,
-  Clock,
+  Boxes,
+  Tag,
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { TierBadge } from '@/components/ui/tier-badge';
-import { useCreateRequirement, useCustomers } from '@/hooks/use-dealflow';
+import { useCreateRequirement, useCustomers, useProducts } from '@/hooks/use-dealflow';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/providers/query-provider';
-import { CustomerTier, ProductCategory, RequirementItem, RequirementPriority } from '@/types/dealflow';
+import { CustomerTier, ProductCategory, RequirementPriority } from '@/types/dealflow';
 
 interface FormItem {
   id: string;
+  productId?: string;
   name: string;
   quantity: number;
   category: ProductCategory;
   notes: string;
 }
 
+interface RequirementTopic {
+  id: string;
+  label: string;
+  badge: string;
+  suggestedTitle: string;
+  suggestedDescription: string;
+  suggestedPriority: RequirementPriority;
+  defaultDeliveryDays: number;
+}
+
+const REQUIREMENT_TOPICS: RequirementTopic[] = [
+  {
+    id: 'it-workstations',
+    label: '🖥️ IT Hardware Refresh & Engineering Workstations',
+    badge: 'Hardware Refresh',
+    suggestedTitle: 'Engineering Workstations & Hardware Refresh',
+    suggestedDescription: 'Bulk acquisition of enterprise workstations, developer laptops, and high-performance peripherals for engineering teams.',
+    suggestedPriority: 'HIGH',
+    defaultDeliveryDays: 14,
+  },
+  {
+    id: 'office-docking',
+    label: '🔌 Workspace Connectivity & Docking Stations Setup',
+    badge: 'Workspace Setup',
+    suggestedTitle: 'Workspace Connectivity & Thunderbolt Docking Deployment',
+    suggestedDescription: 'Procuring Thunderbolt multi-port docking stations and workspace connectivity solutions for hot-desking expansion.',
+    suggestedPriority: 'MEDIUM',
+    defaultDeliveryDays: 10,
+  },
+  {
+    id: 'security-gateway',
+    label: '🛡️ Enterprise Perimeter Security & Gateway Appliances',
+    badge: 'Security Infrastructure',
+    suggestedTitle: 'Enterprise Perimeter Security Gateway & Firewall Rollout',
+    suggestedDescription: 'Deployment of dedicated enterprise security appliances for high-throughput perimeter encryption and network defense.',
+    suggestedPriority: 'URGENT',
+    defaultDeliveryDays: 7,
+  },
+  {
+    id: 'onsite-deployment',
+    label: '🛠️ Professional Onsite Commissioning & Deployment',
+    badge: 'Professional Services',
+    suggestedTitle: 'Professional Onsite System Staging & Commissioning',
+    suggestedDescription: 'End-to-end onsite configuration, OS rollouts, network commissioning, and physical staging handover at corporate facility.',
+    suggestedPriority: 'MEDIUM',
+    defaultDeliveryDays: 15,
+  },
+  {
+    id: 'care-plan-renewal',
+    label: '📜 24/7 Support SLA & Annual Care Plan Renewal',
+    badge: 'Annual Support',
+    suggestedTitle: 'Annual Enterprise Support & Care Plan 24/7 Renewal',
+    suggestedDescription: 'Renewal of mission-critical hardware coverage, 24/7 technical incident SLA, and warranty maintenance.',
+    suggestedPriority: 'MEDIUM',
+    defaultDeliveryDays: 30,
+  },
+  {
+    id: 'custom',
+    label: '✍️ Custom Enterprise Requirement (Self-Defined Scope)',
+    badge: 'Custom Scope',
+    suggestedTitle: '',
+    suggestedDescription: '',
+    suggestedPriority: 'MEDIUM',
+    defaultDeliveryDays: 15,
+  },
+];
+
 export default function NewCustomerRequirementPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { toast } = useToast();
   const { data: customers = [] } = useCustomers();
+  const { data: products = [] } = useProducts();
   const createMutation = useCreateRequirement();
 
   // Active customer context from authenticated user
@@ -55,29 +122,35 @@ export default function NewCustomerRequirementPage() {
   };
 
   // Form State
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [expectedDeliveryDays, setExpectedDeliveryDays] = useState<number>(15);
+  const [selectedTopicId, setSelectedTopicId] = useState<string>('it-workstations');
+  const [title, setTitle] = useState('Engineering Workstations & Hardware Refresh');
+  const [description, setDescription] = useState(
+    'Bulk acquisition of enterprise workstations, developer laptops, and high-performance peripherals for engineering teams.'
+  );
+  const [expectedDeliveryDays, setExpectedDeliveryDays] = useState<number>(14);
   const [priority, setPriority] = useState<RequirementPriority>('HIGH');
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [items, setItems] = useState<FormItem[]>([
     {
       id: 'item-1',
-      name: '10 Laptops (Laptop Pro 14 or equivalent)',
+      productId: 'prod-001',
+      name: 'Laptop Pro 14',
       quantity: 10,
       category: 'Hardware',
       notes: 'Engineering workstations',
     },
     {
       id: 'item-2',
-      name: 'Onsite Setup & Deployment',
+      productId: 'prod-003',
+      name: 'Onsite Setup & Installation',
       quantity: 1,
       category: 'Services',
       notes: 'Network provisioning & OS rollout',
     },
     {
       id: 'item-3',
-      name: '1 Year Support (Care Plan 24/7)',
+      productId: 'prod-005',
+      name: 'Care Plan 24/7',
       quantity: 1,
       category: 'Services',
       notes: 'Mission-critical hardware SLA',
@@ -92,12 +165,27 @@ export default function NewCustomerRequirementPage() {
     assignedSalesExecutive: string;
   } | null>(null);
 
+  // Requirement Topic Change Handler
+  const handleTopicChange = (topicId: string) => {
+    setSelectedTopicId(topicId);
+    const topic = REQUIREMENT_TOPICS.find((t) => t.id === topicId);
+    if (!topic) return;
+
+    if (topic.id !== 'custom') {
+      setTitle(topic.suggestedTitle);
+      setDescription(topic.suggestedDescription);
+      setPriority(topic.suggestedPriority);
+      setExpectedDeliveryDays(topic.defaultDeliveryDays);
+    }
+  };
+
   // Item helpers
   const handleAddItem = () => {
     setItems((prev) => [
       ...prev,
       {
-        id: `item-${Date.now()}`,
+        id: 'item-' + Date.now(),
+        productId: '',
         name: '',
         quantity: 1,
         category: 'Hardware',
@@ -124,8 +212,79 @@ export default function NewCustomerRequirementPage() {
     );
   };
 
+  // Product Selection from Warehouse Catalog
+  const handleProductSelect = (itemId: string, selectedVal: string) => {
+    if (selectedVal === 'custom') {
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === itemId
+            ? { ...it, productId: 'custom', name: '', category: 'Hardware' }
+            : it
+        )
+      );
+      return;
+    }
+
+    const matched = products.find((p) => p.id === selectedVal);
+    if (matched) {
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === itemId
+            ? {
+                ...it,
+                productId: matched.id,
+                name: matched.name,
+                category: matched.category,
+                notes: it.notes || (matched.category === 'Hardware' ? (matched.sku + ' standard specification') : 'Enterprise SLA coverage'),
+              }
+            : it
+        )
+      );
+    }
+  };
+
+  // Warehouse Stock Checker Helper
+  const getItemStockStatus = (item: FormItem) => {
+    const matched = products.find(
+      (p) => p.id === item.productId || p.name.toLowerCase() === item.name.toLowerCase()
+    );
+
+    if (!matched) {
+      return {
+        matchedProduct: null,
+        isHardware: item.category === 'Hardware',
+        availableStock: null,
+        isOutOfStock: false,
+        isExceeding: false,
+        isCompliant: true,
+      };
+    }
+
+    const isHardware = matched.category === 'Hardware';
+    const availableStock = matched.availableStock ?? 0;
+    const isOutOfStock = isHardware && availableStock <= 0;
+    const isExceeding = isHardware && availableStock > 0 && item.quantity > availableStock;
+    const isCompliant = isHardware && availableStock > 0 && item.quantity <= availableStock;
+
+    return {
+      matchedProduct: matched,
+      isHardware,
+      availableStock,
+      isOutOfStock,
+      isExceeding,
+      isCompliant,
+    };
+  };
+
+  // Check how many items currently breach warehouse stock
+  const outOfStockItems = items.filter((it) => {
+    const status = getItemStockStatus(it);
+    return status.isOutOfStock || status.isExceeding;
+  });
+
   // 1-Click Demo Fill: ABC Manufacturing
   const handleQuickFillDemo = () => {
+    setSelectedTopicId('it-workstations');
     setTitle('10 Laptops + Installation + 1 Year Support');
     setDescription(
       'Workstation deployment for Ahmedabad technical engineering division requiring professional onsite setup and 1-year care plan coverage.'
@@ -133,32 +292,41 @@ export default function NewCustomerRequirementPage() {
     setExpectedDeliveryDays(15);
     setPriority('HIGH');
     setAdditionalNotes('Installation at Ahmedabad office. Required before quarterly onboarding.');
+
+    const laptop = products.find((p) => p.name.toLowerCase().includes('laptop'));
+    const setup = products.find((p) => p.name.toLowerCase().includes('setup'));
+    const care = products.find((p) => p.name.toLowerCase().includes('care'));
+
     setItems([
       {
         id: 'item-1',
-        name: 'Laptop Pro 14',
+        productId: laptop?.id || 'prod-001',
+        name: laptop?.name || 'Laptop Pro 14',
         quantity: 10,
         category: 'Hardware',
         notes: 'High-performance developer unified RAM',
       },
       {
         id: 'item-2',
-        name: 'Onsite Setup',
+        productId: setup?.id || 'prod-003',
+        name: setup?.name || 'Onsite Setup & Installation',
         quantity: 1,
         category: 'Services',
         notes: 'Physical staging & network setup at Ahmedabad facility',
       },
       {
         id: 'item-3',
-        name: 'Care Plan 24/7',
+        productId: care?.id || 'prod-005',
+        name: care?.name || 'Care Plan 24/7',
         quantity: 1,
         category: 'Services',
         notes: '1-Year 24/7 replacement response SLA',
       },
     ]);
+
     toast({
       title: 'Demo Specifications Loaded',
-      description: 'Pre-filled ABC Manufacturing 10 Laptops + Installation requirement.',
+      description: 'Pre-filled ABC Manufacturing 10 Laptops + Installation requirement with warehouse SKUs.',
       type: 'info',
     });
   };
@@ -179,7 +347,7 @@ export default function NewCustomerRequirementPage() {
     if (invalidItems) {
       toast({
         title: 'Invalid Items',
-        description: 'Please ensure all requested items have a name and positive quantity.',
+        description: 'Please ensure all requested items have a name selected and positive quantity.',
         type: 'warning',
       });
       return;
@@ -193,7 +361,8 @@ export default function NewCustomerRequirementPage() {
         title: title.trim(),
         description: description.trim(),
         items: items.map((it, idx) => ({
-          id: `RI-${Date.now()}-${idx + 1}`,
+          id: 'RI-' + Date.now() + '-' + (idx + 1),
+          productId: it.productId && it.productId !== 'custom' ? it.productId : undefined,
           name: it.name.trim(),
           quantity: it.quantity,
           category: it.category,
@@ -214,7 +383,7 @@ export default function NewCustomerRequirementPage() {
 
       toast({
         title: 'Requirement Submitted ✓',
-        description: `${created.id} submitted for review by Marcus Vance.`,
+        description: created.id + ' submitted for review by Marcus Vance.',
         type: 'success',
       });
     } catch (err) {
@@ -261,7 +430,7 @@ export default function NewCustomerRequirementPage() {
               </span>
             </div>
             <p className="text-slate-600 leading-relaxed pt-1">
-              <strong>What Happens Next:</strong> Your requirement has been routed to your assigned Sales Executive. They will assess product availability, evaluate eligible commercial discounts under your commercial standing, and construct a formal Quotation.
+              <strong>What Happens Next:</strong> Your requirement has been routed to your assigned Sales Executive. They will evaluate warehouse inventory availability, apply eligible commercial discounts under your commercial standing, and construct a formal Quotation.
             </p>
           </div>
 
@@ -273,7 +442,7 @@ export default function NewCustomerRequirementPage() {
           </div>
 
           <div className="flex items-center justify-center gap-3 pt-2">
-            <Link href={`/portal/requirements/${submittedReq.id}`}>
+            <Link href={'/portal/requirements/' + submittedReq.id}>
               <Button className="bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold">
                 View Submitted Requirement
               </Button>
@@ -315,7 +484,7 @@ export default function NewCustomerRequirementPage() {
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Describe what your organization needs. A dedicated Sales Executive will review your specifications and generate an enterprise quotation.
+            Specify products from our warehouse or custom needs. Real-time warehouse inventory availability is verified instantly.
           </p>
         </div>
 
@@ -339,7 +508,7 @@ export default function NewCustomerRequirementPage() {
             Enterprise Procurement Policy Notice
           </p>
           <p className="text-slate-600">
-            Customers create <strong>Requirements</strong> (&quot;What you need&quot;). Sales Executives review and produce <strong>Quotations</strong> (&quot;Official prices, applied discounts, and commercial terms&quot;).
+            Customers create <strong>Requirements</strong> (&quot;What you need&quot;). Sales Executives review warehouse allocation and produce <strong>Quotations</strong> (&quot;Official prices, applied discounts, and commercial terms&quot;).
           </p>
         </div>
       </div>
@@ -385,15 +554,36 @@ export default function NewCustomerRequirementPage() {
           </CardContent>
         </Card>
 
-        {/* Section 2: Requirement Overview */}
+        {/* Section 2: Requirement Topic & Expected Timeline */}
         <Card className="bg-white border-slate-200 shadow-enterprise">
           <CardHeader className="p-4 border-b border-slate-100">
             <CardTitle className="text-xs uppercase tracking-wider font-bold text-slate-800 flex items-center gap-2">
-              <ClipboardList className="w-4 h-4 text-teal-600" />
-              2. Requirement Overview & Expected Timeline
+              <Tag className="w-4 h-4 text-teal-600" />
+              2. Requirement Topic & Business Objective
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 space-y-4">
+            {/* Requirement Topic Dropdown */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Select Requirement Topic / Scope Domain *
+              </label>
+              <Select
+                value={selectedTopicId}
+                onChange={(e) => handleTopicChange(e.target.value)}
+                className="text-xs font-semibold bg-white"
+              >
+                {REQUIREMENT_TOPICS.map((topic) => (
+                  <option key={topic.id} value={topic.id}>
+                    {topic.label}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Selecting a topic pre-structures standard specifications, expected delivery windows, and recommended warehouse SKUs.
+              </p>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Requirement Title / Short Summary *
@@ -457,16 +647,16 @@ export default function NewCustomerRequirementPage() {
           </CardContent>
         </Card>
 
-        {/* Section 3: Requested Products & Services */}
+        {/* Section 3: Requested Products with Warehouse Stock Dropdown & Out of Stock Warnings */}
         <Card className="bg-white border-slate-200 shadow-enterprise">
           <CardHeader className="p-4 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
             <div>
               <CardTitle className="text-xs uppercase tracking-wider font-bold text-slate-800 flex items-center gap-2">
-                <Layers className="w-4 h-4 text-teal-600" />
-                3. Requested Items & Quantities
+                <Boxes className="w-4 h-4 text-teal-600" />
+                3. Requested Items & Warehouse Inventory Selection
               </CardTitle>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                Specify the estimated quantities and lines you need. The sales rep will price them in the quotation.
+                Select items from our warehouse catalog or specify custom requirements. Current warehouse stock levels are evaluated in real-time.
               </p>
             </div>
             <Button
@@ -480,81 +670,204 @@ export default function NewCustomerRequirementPage() {
               Add Item
             </Button>
           </CardHeader>
-          <CardContent className="p-4 space-y-3">
-            {items.map((item, idx) => (
-              <div
-                key={item.id}
-                className="p-3 bg-slate-50/60 rounded-lg border border-slate-200 text-xs grid grid-cols-1 sm:grid-cols-12 gap-3 items-center"
-              >
-                <div className="sm:col-span-1 text-center font-mono font-bold text-slate-400">
-                  #{idx + 1}
-                </div>
 
-                <div className="sm:col-span-5">
-                  <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">
-                    Item / Capability Name *
-                  </label>
-                  <Input
-                    value={item.name}
-                    onChange={(e) => handleItemChange(item.id, 'name', e.target.value)}
-                    placeholder="e.g. Laptop Pro 14, Onsite Setup, 24/7 Care Plan"
-                    className="text-xs h-8 bg-white"
-                    required
-                  />
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">
-                    Quantity
-                  </label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={item.quantity}
-                    onChange={(e) =>
-                      handleItemChange(item.id, 'quantity', parseInt(e.target.value) || 1)
-                    }
-                    className="text-xs h-8 text-center font-mono bg-white"
-                  />
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">
-                    Category
-                  </label>
-                  <Select
-                    value={item.category}
-                    onChange={(e) =>
-                      handleItemChange(item.id, 'category', e.target.value as ProductCategory)
-                    }
-                    className="text-xs h-8 bg-white"
-                  >
-                    <option value="Hardware">Hardware</option>
-                    <option value="Services">Services</option>
-                  </Select>
-                </div>
-
-                <div className="sm:col-span-2 flex items-center justify-end gap-2 pt-3 sm:pt-0">
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveItem(item.id)}
-                    className="text-slate-400 hover:text-rose-600 p-1.5 rounded transition cursor-pointer"
-                    title="Remove Item"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="sm:col-span-11 sm:col-start-2">
-                  <Input
-                    value={item.notes}
-                    onChange={(e) => handleItemChange(item.id, 'notes', e.target.value)}
-                    placeholder="Optional item notes (e.g. 32GB RAM variant, Ahmedabad office site setup)..."
-                    className="text-[11px] h-7 bg-white text-slate-600"
-                  />
+          <CardContent className="p-4 space-y-4">
+            {/* Global Stock Advisory Alert if any item is out of stock */}
+            {outOfStockItems.length > 0 && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-amber-900">
+                    Warehouse Stock Notice ({outOfStockItems.length} item{outOfStockItems.length > 1 ? 's' : ''} exceed current stock):
+                  </p>
+                  <p className="text-amber-800 text-[11px] mt-0.5">
+                    Items marked below exceed current warehouse inventory. You can still submit this requirement — Marcus Vance will coordinate supplier lead times and warehouse replenishment when preparing your quotation.
+                  </p>
                 </div>
               </div>
-            ))}
+            )}
+
+            {items.map((item, idx) => {
+              const stockStatus = getItemStockStatus(item);
+              const isCustom = item.productId === 'custom' || (!item.productId && !stockStatus.matchedProduct);
+
+              return (
+                <div
+                  key={item.id}
+                  className={'p-3 rounded-lg border transition-all ' + (
+                    stockStatus.isOutOfStock
+                      ? 'bg-rose-50/50 border-rose-300 ring-1 ring-rose-200'
+                      : stockStatus.isExceeding
+                      ? 'bg-amber-50/50 border-amber-300 ring-1 ring-amber-200'
+                      : 'bg-slate-50/60 border-slate-200'
+                  ) + ' text-xs space-y-2.5'}
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
+                    {/* Index */}
+                    <div className="sm:col-span-1 text-center font-mono font-bold text-slate-400 pt-2">
+                      #{idx + 1}
+                    </div>
+
+                    {/* Warehouse Product Dropdown */}
+                    <div className="sm:col-span-5 space-y-1">
+                      <label className="block text-[10px] font-semibold text-slate-600">
+                        Select Item from Warehouse Catalog *
+                      </label>
+                      <Select
+                        value={
+                          item.productId
+                            ? item.productId
+                            : stockStatus.matchedProduct
+                            ? stockStatus.matchedProduct.id
+                            : 'custom'
+                        }
+                        onChange={(e) => handleProductSelect(item.id, e.target.value)}
+                        className="text-xs h-8 bg-white"
+                      >
+                        <option value="">-- Choose Warehouse Item --</option>
+                        <optgroup label="📦 Warehouse Hardware Inventory">
+                          {products
+                            .filter((p) => p.category === 'Hardware')
+                            .map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} ({p.sku}) — {(p.availableStock ?? 0) > 0 ? (p.availableStock + ' in stock') : 'Out of Stock'}
+                              </option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="💼 Enterprise Services & Subscriptions">
+                          {products
+                            .filter((p) => p.category === 'Services')
+                            .map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} ({p.sku}) — Continuous Service
+                              </option>
+                            ))}
+                        </optgroup>
+                        <option value="custom">✍️ Custom Item / Other Specification...</option>
+                      </Select>
+
+                      {/* Custom Item Name input if custom is chosen */}
+                      {isCustom && (
+                        <div className="pt-1">
+                          <Input
+                            value={item.name}
+                            onChange={(e) => handleItemChange(item.id, 'name', e.target.value)}
+                            placeholder="Enter custom product or service capability name..."
+                            className="text-xs h-7 bg-white font-medium"
+                            required
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Quantity Input */}
+                    <div className="sm:col-span-2 space-y-1">
+                      <label className="block text-[10px] font-semibold text-slate-600">
+                        Quantity
+                      </label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={item.quantity}
+                        onChange={(e) =>
+                          handleItemChange(item.id, 'quantity', parseInt(e.target.value) || 1)
+                        }
+                        className={'text-xs h-8 text-center font-mono bg-white font-bold ' + (
+                          stockStatus.isOutOfStock
+                            ? 'border-rose-400 text-rose-700'
+                            : stockStatus.isExceeding
+                            ? 'border-amber-400 text-amber-800'
+                            : ''
+                        )}
+                      />
+                    </div>
+
+                    {/* Category Selector */}
+                    <div className="sm:col-span-3 space-y-1">
+                      <label className="block text-[10px] font-semibold text-slate-600">
+                        Category
+                      </label>
+                      <Select
+                        value={item.category}
+                        onChange={(e) =>
+                          handleItemChange(item.id, 'category', e.target.value as ProductCategory)
+                        }
+                        disabled={!isCustom}
+                        className="text-xs h-8 bg-white disabled:opacity-75 disabled:bg-slate-100"
+                      >
+                        <option value="Hardware">Hardware (15% Max Policy)</option>
+                        <option value="Services">Services (10% Max Policy)</option>
+                      </Select>
+                    </div>
+
+                    {/* Remove Action */}
+                    <div className="sm:col-span-1 flex items-center justify-end pt-2 sm:pt-6">
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItem(item.id)}
+                        className="text-slate-400 hover:text-rose-600 p-1.5 rounded transition cursor-pointer"
+                        title="Remove Item"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Stock Availability Status Pill & Warnings */}
+                  <div className="pt-1 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/60">
+                    <div className="flex-1">
+                      {stockStatus.matchedProduct ? (
+                        stockStatus.isHardware ? (
+                          stockStatus.isOutOfStock ? (
+                            <div className="flex items-center gap-1.5 text-[11px] text-rose-700 font-semibold">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-600" />
+                              <span>
+                                🚨 <strong>OUT OF STOCK:</strong> 0 units available in warehouse. Vendor lead time will be required.
+                              </span>
+                            </div>
+                          ) : stockStatus.isExceeding ? (
+                            <div className="flex items-center gap-1.5 text-[11px] text-amber-800 font-semibold">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                              <span>
+                                ⚠️ <strong>EXCEEDS WAREHOUSE STOCK:</strong> Only {stockStatus.availableStock} units available (Requested: {item.quantity}). Excess {item.quantity - (stockStatus.availableStock ?? 0)} units will be placed on backorder.
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 font-medium">
+                              <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+                              <span>
+                                ✓ <strong>In Stock:</strong> {stockStatus.availableStock} units available across warehouses.
+                              </span>
+                            </div>
+                          )
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-[11px] text-teal-700 font-medium">
+                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-teal-600" />
+                            <span>
+                              ✓ <strong>Available:</strong> Professional enterprise service / subscription capacity.
+                            </span>
+                          </div>
+                        )
+                      ) : (
+                        <div className="text-[11px] text-slate-500 italic">
+                          Custom specification — Sales Executive will source pricing and availability.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Optional Item Notes */}
+                    <div className="w-full sm:w-1/2">
+                      <Input
+                        value={item.notes}
+                        onChange={(e) => handleItemChange(item.id, 'notes', e.target.value)}
+                        placeholder="Deployment notes (e.g. 32GB RAM variant, Ahmedabad site staging)..."
+                        className="text-[11px] h-6 bg-white text-slate-600"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
 

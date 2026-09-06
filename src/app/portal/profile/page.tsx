@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/providers/query-provider";
+import { ManageSubscriptionDialog } from "@/components/subscriptions/manage-subscription-dialog";
 type Profile = {
   user: { firstName: string; lastName: string; email: string };
   customer: { name: string; tier: string; industry: string | null };
@@ -43,14 +44,43 @@ export default function CustomerProfilePage() {
     companyName: profile.customer.name,
     industry: profile.customer.industry ?? "",
   };
+  const [subModalOpen, setSubModalOpen] = useState(false);
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold">Organization profile</h1>
+      <h1 className="text-2xl font-bold text-slate-900">Organization & Account Profile</h1>
+
+      {/* Commercial Customer Tier vs SaaS Plan Separation Card */}
+      <Card className="border-teal-100 bg-gradient-to-br from-teal-50/50 to-white">
+        <CardContent className="p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <span className="text-[10px] text-teal-800 uppercase tracking-wider font-bold">
+                System-Assigned Commercial Tier
+              </span>
+              <h2 className="text-lg font-bold text-slate-950 flex items-center gap-2">
+                Tier: {profile.customer.tier}
+              </h2>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Evaluated systematically based on lifetime spend, credit health, and transaction frequency.
+              </p>
+            </div>
+            <Button
+              onClick={() => setSubModalOpen(true)}
+              className="bg-teal-600 hover:bg-teal-700 text-white text-xs shrink-0 self-start sm:self-auto"
+            >
+              Upgrade / Change Subscription Plan (Prorated)
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardContent className="p-6 space-y-4">
-          <p>
-            {profile.user.email} ? Commercial tier: {profile.customer.tier}
-          </p>
+          <div className="border-b border-slate-100 pb-3">
+            <h3 className="font-semibold text-slate-900">User & Contact Details</h3>
+            <p className="text-xs text-slate-500">{profile.user.email}</p>
+          </div>
           <form
             className="space-y-4"
             onSubmit={(e) => {
@@ -91,6 +121,15 @@ export default function CustomerProfilePage() {
           </form>
         </CardContent>
       </Card>
+
+      <ManageSubscriptionDialog
+        open={subModalOpen}
+        onOpenChange={setSubModalOpen}
+        currentPlan="STARTER"
+        onPlanChange={() => {
+          client.invalidateQueries();
+        }}
+      />
     </div>
   );
 }

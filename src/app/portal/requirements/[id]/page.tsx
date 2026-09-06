@@ -21,7 +21,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
 import { TierBadge } from '@/components/ui/tier-badge';
-import { useRequirement, useQuotations } from '@/hooks/use-dealflow';
+import { useRequirement, useQuotations, useProducts } from '@/hooks/use-dealflow';
 import { CardLoadingSkeleton } from '@/components/ui/loading-state';
 import { ErrorState } from '@/components/ui/error-state';
 import { RequirementPriority, RequirementStatus } from '@/types/dealflow';
@@ -68,6 +68,7 @@ export default function CustomerRequirementDetailPage() {
 
   const { data: req, isLoading, isError, refetch } = useRequirement(reqId);
   const { data: quotations = [] } = useQuotations();
+  const { data: products = [] } = useProducts();
 
   if (isLoading) {
     return (
@@ -252,31 +253,71 @@ export default function CustomerRequirementDetailPage() {
                     <TableHead>Requested Item</TableHead>
                     <TableHead className="w-24">Category</TableHead>
                     <TableHead className="w-20 text-center">Quantity</TableHead>
+                    <TableHead className="w-48">Warehouse Stock</TableHead>
                     <TableHead>Item Notes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {req.items.map((it, idx) => (
-                    <TableRow key={it.id} className="text-xs border-b border-slate-100">
-                      <TableCell className="text-center font-mono text-slate-400">
-                        {idx + 1}
-                      </TableCell>
-                      <TableCell className="font-semibold text-slate-900">
-                        {it.name}
-                      </TableCell>
-                      <TableCell>
-                        <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700">
-                          {it.category || 'Hardware'}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center font-mono font-bold text-slate-900">
-                        {it.quantity}
-                      </TableCell>
-                      <TableCell className="text-slate-500 text-[11px]">
-                        {it.notes || '—'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {req.items.map((it, idx) => {
+                    const matched = products.find(
+                      (p) => (it.productId && p.id === it.productId) || p.name.toLowerCase() === it.name.toLowerCase()
+                    );
+                    const isHw = it.category === 'Hardware' || matched?.category === 'Hardware';
+                    const stock = matched?.availableStock ?? 0;
+                    const isOutOfStock = isHw && matched && stock <= 0;
+                    const isExceeding = isHw && matched && stock > 0 && it.quantity > stock;
+
+                    return (
+                      <TableRow key={it.id} className="text-xs border-b border-slate-100">
+                        <TableCell className="text-center font-mono text-slate-400">
+                          {idx + 1}
+                        </TableCell>
+                        <TableCell className="font-semibold text-slate-900">
+                          {it.name}
+                        </TableCell>
+                        <TableCell>
+                          <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700">
+                            {it.category || 'Hardware'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center font-mono font-bold text-slate-900">
+                          {it.quantity}
+                        </TableCell>
+                        <TableCell>
+                          {matched ? (
+                            isHw ? (
+                              isOutOfStock ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                  <AlertTriangle className="w-3 h-3 text-rose-600" />
+                                  Out of Stock (0 avail)
+                                </span>
+                              ) : isExceeding ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                  <AlertTriangle className="w-3 h-3 text-amber-600" />
+                                  Exceeds Stock ({stock} in warehouse)
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  In Stock ({stock} avail)
+                                </span>
+                              )
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
+                                <CheckCircle2 className="w-3 h-3 text-teal-600" />
+                                Active Service SLA
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic">Custom item specification</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-slate-500 text-[11px]">
+                          {it.notes || '—'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>

@@ -254,7 +254,7 @@ export const dealflowApi = {
   return adaptRequirement(await apiFetch('/api/quote-requests',{method:'POST',body:JSON.stringify({title:payload.title,description:payload.description,
     targetDate:new Date(Date.now()+payload.expectedDeliveryDays*86400000).toISOString(),
     metadata:{priority:payload.priority,expectedDeliveryDays:payload.expectedDeliveryDays,additionalNotes:payload.additionalNotes},
-    items:payload.items.map(item=>({description:item.name,quantity:item.quantity,requirements:{category:item.category,notes:item.notes}}))})}));
+    items:payload.items.map(item=>({productId:item.productId,description:item.name,quantity:item.quantity,requirements:{category:item.category,notes:item.notes,productId:item.productId}}))})}));
 },
 
   async updateRequirementStatus(id:string,status:RequirementStatus,_quotationId?:string):Promise<CustomerRequirement> {

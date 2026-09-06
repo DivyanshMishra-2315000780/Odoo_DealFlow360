@@ -198,6 +198,7 @@ export type RequirementPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
 export interface RequirementItem {
   id: string;
+  productId?: string;
   name: string;
   quantity: number;
   category?: ProductCategory;

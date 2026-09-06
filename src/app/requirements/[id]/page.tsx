@@ -18,7 +18,7 @@ import {
   Layers,
   Inbox
 } from "lucide-react";
-import { useRequirement, useCustomer, useUpdateRequirementStatus } from "@/hooks/use-dealflow";
+import { useRequirement, useCustomer, useUpdateRequirementStatus, useProducts } from "@/hooks/use-dealflow";
 import { TierBadge } from "@/components/ui/tier-badge";
 import { CardLoadingSkeleton } from "@/components/ui/loading-state";
 import { RequirementPriority, RequirementStatus } from "@/types/dealflow";
@@ -33,6 +33,7 @@ export default function RequirementDetailPage({
 
   const { data: requirement, isLoading: reqLoading } = useRequirement(requirementId);
   const { data: customer, isLoading: custLoading } = useCustomer(requirement?.customerId || "");
+  const { data: products = [] } = useProducts();
   const updateStatusMutation = useUpdateRequirementStatus();
 
   if (reqLoading || custLoading) {
@@ -258,34 +259,74 @@ export default function RequirementDetailPage({
                     <th className="py-2.5 px-3">Category</th>
                     <th className="py-2.5 px-3">Item / Service Name</th>
                     <th className="py-2.5 px-3 text-center">Quantity</th>
+                    <th className="py-2.5 px-3">Warehouse Stock Availability</th>
                     <th className="py-2.5 px-3">Technical Specification / Notes</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {requirement.items.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/50">
-                      <td className="py-3 px-3">
-                        <span className={`px-2 py-0.5 text-[10px] font-semibold rounded uppercase tracking-wider ${
-                          item.category === "Hardware" 
-                            ? "bg-blue-50 text-blue-700 border border-blue-200"
-                            : item.category === "Services"
-                            ? "bg-purple-50 text-purple-700 border border-purple-200"
-                            : "bg-teal-50 text-teal-700 border border-teal-200"
-                        }`}>
-                          {item.category || "Hardware"}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 font-semibold text-slate-900">
-                        {item.name}
-                      </td>
-                      <td className="py-3 px-3 text-center font-mono font-bold text-slate-800">
-                        {item.quantity}
-                      </td>
-                      <td className="py-3 px-3 text-slate-600">
-                        {item.notes || <span className="text-slate-400 italic">Standard enterprise specification</span>}
-                      </td>
-                    </tr>
-                  ))}
+                  {requirement.items.map((item, idx) => {
+                    const matched = products.find(
+                      (p) => (item.productId && p.id === item.productId) || p.name.toLowerCase() === item.name.toLowerCase()
+                    );
+                    const isHw = item.category === "Hardware" || matched?.category === "Hardware";
+                    const stock = matched?.availableStock ?? 0;
+                    const isOutOfStock = isHw && matched && stock <= 0;
+                    const isExceeding = isHw && matched && stock > 0 && item.quantity > stock;
+
+                    return (
+                      <tr key={idx} className="hover:bg-slate-50/50">
+                        <td className="py-3 px-3">
+                          <span className={`px-2 py-0.5 text-[10px] font-semibold rounded uppercase tracking-wider ${
+                            item.category === "Hardware" 
+                              ? "bg-blue-50 text-blue-700 border border-blue-200"
+                              : item.category === "Services"
+                              ? "bg-purple-50 text-purple-700 border border-purple-200"
+                              : "bg-teal-50 text-teal-700 border border-teal-200"
+                          }`}>
+                            {item.category || "Hardware"}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 font-semibold text-slate-900">
+                          {item.name}
+                        </td>
+                        <td className="py-3 px-3 text-center font-mono font-bold text-slate-800">
+                          {item.quantity}
+                        </td>
+                        <td className="py-3 px-3">
+                          {matched ? (
+                            isHw ? (
+                              isOutOfStock ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                  <AlertTriangle className="w-3 h-3 text-rose-600" />
+                                  Out of Stock (0 avail)
+                                </span>
+                              ) : isExceeding ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                  <AlertTriangle className="w-3 h-3 text-amber-600" />
+                                  Exceeds Stock ({stock} in warehouse)
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  In Stock ({stock} avail)
+                                </span>
+                              )
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
+                                <CheckCircle2 className="w-3 h-3 text-teal-600" />
+                                Active Service SLA
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic">Custom item specification</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-slate-600">
+                          {item.notes || <span className="text-slate-400 italic">Standard enterprise specification</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

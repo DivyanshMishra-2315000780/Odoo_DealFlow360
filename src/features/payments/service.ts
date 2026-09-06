@@ -1,4 +1,10 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { addMonths } from 'date-fns';
+import { z } from 'zod';
+import { v4 as uuid } from 'uuid';
+import { eq } from 'drizzle-orm';
+import { db } from '@/db';
+import { invoices, invoiceLines, subscriptionPlans, subscriptions } from '@/db/schema';
 import { requireAuth, requirePermission } from '@/lib/auth/rbac';
 import { AuthorizationError, BusinessError } from '@/lib/errors';
 import { recordAudit } from '@/features/audit/service';
@@ -126,9 +132,121 @@ export async function verifyPayment(input: unknown) {
     context.payment.id, context.invoice.id, context.invoice.orderId,
     context.invoice.quotationId, values.razorpay_payment_id,
   );
+
+  // If this payment settled a subscription invoice, activate/update customer's subscription!
+  if (context.invoice.invoiceNumber.startsWith('INV-SUB-')) {
+    try {
+      const [line] = await db.select().from(invoiceLines).where(eq(invoiceLines.invoiceId, context.invoice.id)).limit(1);
+      const desc = line?.description ?? '';
+      let planKey = 'sp-starter';
+      if (desc.includes('PROFESSIONAL') || desc.includes('Professional')) planKey = 'sp-pro';
+      else if (desc.includes('ENTERPRISE') || desc.includes('Enterprise')) planKey = 'sp-ent';
+
+      const [plan] = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.id, planKey)).limit(1);
+      if (plan) {
+        const [existing] = await db.select().from(subscriptions).where(eq(subscriptions.customerId, context.invoice.customerId)).limit(1);
+        if (existing) {
+          await db.update(subscriptions).set({
+            planId: plan.id,
+            recurringAmt: plan.price,
+            status: 'ACTIVE',
+            updatedAt: new Date(),
+            nextBillingDate: addMonths(new Date(), 1),
+          }).where(eq(subscriptions.id, existing.id));
+        } else {
+          await db.insert(subscriptions).values({
+            id: uuid(),
+            customerId: context.invoice.customerId,
+            planId: plan.id,
+            quantity: 1,
+            recurringAmt: plan.price,
+            status: 'ACTIVE',
+            startDate: new Date(),
+            nextBillingDate: addMonths(new Date(), 1),
+          });
+        }
+      }
+    } catch (subErr) {
+      console.error('Failed to activate subscription after payment verification:', subErr);
+    }
+  }
+
   await recordAudit({
     actorId: user.userId, actorRole: user.role, entity: 'Payment', entityId: context.payment.id,
     action: 'PAYMENT_VERIFIED', newValue: { gatewayPaymentId: values.razorpay_payment_id },
   });
   return payment;
+}
+
+export async function createSubscriptionCheckout(input: unknown) {
+  const user = await requireAuth();
+  if (user.role !== 'CUSTOMER' || !user.customerId) {
+    throw new AuthorizationError('Customer account required for subscription checkout');
+  }
+
+  const schema = z.object({
+    plan: z.enum(['STARTER', 'PROFESSIONAL', 'ENTERPRISE']),
+    amount: z.number().positive().optional(),
+    isProrated: z.boolean().optional(),
+  });
+  const values = schema.parse(input);
+
+  const planRates: Record<string, number> = {
+    STARTER: 499,
+    PROFESSIONAL: 1499,
+    ENTERPRISE: 3999,
+  };
+  const baseRate = planRates[values.plan] ?? 499;
+  const finalAmountDollars = values.amount && values.isProrated ? values.amount : baseRate;
+  const amountCents = Math.max(100, Math.round(finalAmountDollars * 100));
+
+  const invoiceId = uuid();
+  const invoiceNum = `INV-SUB-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${invoiceId.slice(0, 6).toUpperCase()}`;
+
+  const [invoice] = await db.insert(invoices).values({
+    id: invoiceId,
+    invoiceNumber: invoiceNum,
+    customerId: user.customerId,
+    status: 'ISSUED',
+    dueDate: new Date(Date.now() + 7 * 86400000),
+    subtotal: String(finalAmountDollars),
+    tax: '0',
+    total: String(finalAmountDollars),
+    amountDue: String(finalAmountDollars),
+  }).returning();
+
+  await db.insert(invoiceLines).values({
+    id: uuid(),
+    invoiceId: invoice.id,
+    description: `DealFlow360 ${values.plan} Subscription Plan ${values.isProrated ? '(Prorated Adjustment)' : '(Monthly)'}`,
+    amount: String(finalAmountDollars),
+    isRecurring: true,
+  });
+
+  const { keyId } = razorpayCredentials();
+  const currency = 'USD';
+  const receipt = invoiceNum.slice(0, 40);
+  let providerOrder: { id: string; amount: number; currency: string };
+  try {
+    providerOrder = await razorpayRequest<{ id: string; amount: number; currency: string }>('/orders', {
+      method: 'POST', body: JSON.stringify({ amount: amountCents, currency, receipt }),
+    });
+  } catch (err) {
+    console.error('Razorpay USD subscription order failed, retrying with INR:', err);
+    providerOrder = await razorpayRequest<{ id: string; amount: number; currency: string }>('/orders', {
+      method: 'POST', body: JSON.stringify({ amount: amountCents, currency: 'INR', receipt }),
+    });
+  }
+
+  const payment = await insertPayment(invoice.id, invoice.amountDue, providerOrder.id);
+
+  return {
+    paymentId: payment.id,
+    keyId,
+    orderId: providerOrder.id,
+    amount: providerOrder.amount,
+    currency: providerOrder.currency,
+    invoiceId: invoice.id,
+    plan: values.plan,
+  };
 }

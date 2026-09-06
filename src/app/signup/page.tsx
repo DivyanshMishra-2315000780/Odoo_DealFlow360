@@ -29,6 +29,8 @@ import { CustomerTier } from '@/types/dealflow';
 import { SubscriptionPlan } from '@/types/auth';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/providers/query-provider';
+import { request } from '@/lib/http/client';
+import { loadCheckout, openCheckout, CheckoutOrder } from '@/lib/payments/razorpay';
 
 const signupSchema = z
   .object({
@@ -191,10 +193,78 @@ export default function SignupPage() {
           type: 'warning',
         });
         router.push('/login');
-      } else {
+        return;
+      }
+
+      // If Customer selected a paid subscription plan, open payment gateway!
+      if (values.userType === 'CUSTOMER' && selectedPlan !== 'NONE') {
         toast({
-          title: 'Account Registered',
-          description: `Welcome to DealFlow360, ${user.name}. ${user.company} initialized under ${user.tier} Tier governance.`,
+          title: 'Account Created',
+          description: `Opening secure Razorpay payment checkout for your ${selectedPlan} subscription...`,
+          type: 'info',
+        });
+
+        try {
+          const order = await request<CheckoutOrder & { invoiceId: string }>('/api/payments/subscription-checkout', {
+            method: 'POST',
+            body: JSON.stringify({ plan: selectedPlan }),
+          });
+
+          await loadCheckout();
+          openCheckout(
+            order,
+            order.invoiceId,
+            async (receipt) => {
+              try {
+                await request('/api/payments/verify', {
+                  method: 'POST',
+                  body: JSON.stringify(receipt),
+                });
+                toast({
+                  title: 'Subscription Activated! ✓',
+                  description: `Welcome ${user.name}! Your ${selectedPlan} subscription is now active for ${user.company}.`,
+                  type: 'success',
+                });
+              } catch {
+                toast({
+                  title: 'Payment Received',
+                  description: 'Payment was received. Your subscription balance will refresh under portal invoices.',
+                  type: 'info',
+                });
+              }
+              router.push('/portal');
+            },
+            () => {
+              toast({
+                title: 'Checkout Closed',
+                description: 'Your account is ready! You can complete payment or change plans anytime from your portal.',
+                type: 'info',
+              });
+              router.push('/portal');
+            },
+            (errReason) => {
+              toast({
+                title: 'Payment Cancelled',
+                description: errReason || 'Payment could not be processed. You can retry anytime in the customer portal.',
+                type: 'warning',
+              });
+              router.push('/portal');
+            }
+          );
+        } catch (checkoutErr) {
+          console.error('Subscription checkout error:', checkoutErr);
+          toast({
+            title: 'Account Created (Payment Offline)',
+            description: `Welcome ${user.name}! Your account is initialized. You can settle your subscription anytime under portal invoices.`,
+            type: 'info',
+          });
+          router.push('/portal');
+        }
+      } else {
+        // Free / 14-day evaluation
+        toast({
+          title: 'Account Registered ✓',
+          description: `Welcome ${user.name}! ${user.company} is active on the 14-day evaluation trial. You can upgrade with proration anytime.`,
           type: 'success',
         });
         router.push('/portal');

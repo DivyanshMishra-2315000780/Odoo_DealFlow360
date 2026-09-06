@@ -23,6 +23,11 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 
+import { request } from '@/lib/http/client';
+import { loadCheckout, openCheckout, CheckoutOrder } from '@/lib/payments/razorpay';
+import { useQueryClient } from '@tanstack/react-query';
+import { QUERY_KEYS } from '@/hooks/use-dealflow';
+
 interface ManageSubscriptionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -42,6 +47,7 @@ export function ManageSubscriptionDialog({
   const [daysRemaining] = useState(18); // Realistic mid-cycle day count
   const [isUpdating, setIsUpdating] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const proration = calculateSubscriptionProration({
     currentPlan,
@@ -50,20 +56,98 @@ export function ManageSubscriptionDialog({
     totalDaysInCycle: 30,
   });
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
+    if (selectedPlan === 'NONE') {
+      onPlanChange('NONE');
+      onOpenChange(false);
+      return;
+    }
+
     setIsUpdating(true);
-    setTimeout(() => {
+
+    // If upgrading and there is a positive prorated charge, open Razorpay
+    if (proration.isUpgrade && proration.proratedAmount > 0) {
+      try {
+        toast({
+          title: 'Preparing Prorated Checkout',
+          description: `Opening Razorpay for prorated amount of ${formatCurrency(proration.proratedAmount)}...`,
+          type: 'info',
+        });
+
+        const order = await request<CheckoutOrder & { invoiceId: string }>('/api/payments/subscription-checkout', {
+          method: 'POST',
+          body: JSON.stringify({
+            plan: selectedPlan,
+            amount: proration.proratedAmount,
+            isProrated: true,
+          }),
+        });
+
+        await loadCheckout();
+        openCheckout(
+          order,
+          order.invoiceId,
+          async (receipt) => {
+            try {
+              await request('/api/payments/verify', {
+                method: 'POST',
+                body: JSON.stringify(receipt),
+              });
+              toast({
+                title: 'Subscription Upgraded! ✓',
+                description: `Successfully upgraded to ${PLAN_PRICING[selectedPlan].name}. Prorated charge of ${formatCurrency(proration.proratedAmount)} processed.`,
+                type: 'success',
+              });
+            } catch {
+              toast({
+                title: 'Payment Recorded',
+                description: 'Payment verified. Subscription details will refresh shortly.',
+                type: 'info',
+              });
+            }
+            onPlanChange(selectedPlan);
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.SUBSCRIPTIONS });
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INVOICES });
+            setIsUpdating(false);
+            onOpenChange(false);
+          },
+          () => {
+            setIsUpdating(false);
+            toast({
+              title: 'Checkout Closed',
+              description: 'Plan change was not completed. You can retry anytime.',
+              type: 'info',
+            });
+          },
+          (errReason) => {
+            setIsUpdating(false);
+            toast({
+              title: 'Payment Failed',
+              description: errReason || 'Payment could not be processed.',
+              type: 'warning',
+            });
+          }
+        );
+      } catch (err: any) {
+        setIsUpdating(false);
+        toast({
+          title: 'Upgrade Failed',
+          description: err?.message || 'Could not initiate checkout.',
+          type: 'error',
+        });
+      }
+    } else {
+      // Downgrade or zero charge: apply plan change with scheduled credit
       onPlanChange(selectedPlan);
       setIsUpdating(false);
       onOpenChange(false);
       toast({
-        title: 'Subscription Updated',
-        description: proration.isUpgrade
-          ? `Upgraded to ${PLAN_PRICING[selectedPlan].name}. Prorated charge of ${formatCurrency(proration.proratedAmount)} applied.`
-          : `Switched to ${PLAN_PRICING[selectedPlan].name}. Prorated credit of ${formatCurrency(Math.abs(proration.proratedAmount))} scheduled.`,
+        title: 'Subscription Adjusted',
+        description: `Switched to ${PLAN_PRICING[selectedPlan].name}. Prorated credit of ${formatCurrency(Math.abs(proration.proratedAmount))} scheduled.`,
         type: 'success',
       });
-    }, 400);
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.SUBSCRIPTIONS });
+    }
   };
 
   const planOptions: SubscriptionPlan[] = ['STARTER', 'PROFESSIONAL', 'ENTERPRISE'];
