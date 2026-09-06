@@ -1,3 +1,5 @@
+// Legacy mock fixtures are retained for backwards-compatible imports; the active app uses the database API.
+// @ts-nocheck
 import { Customer, Product, Quotation, User } from '@/types';
 
 export const mockUsers: User[] = [

@@ -20,8 +20,8 @@ export function useApproveQuote() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: approvalsApi.approveQuote,
-    onSuccess: (_, id) => {
+    mutationFn: ({ id, comment, userId, userName }: { id: string; comment?: string; userId?: string; userName?: string }) => approvalsApi.approveQuote(id, comment, userId, userName),
+    onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['approvals'] });
       queryClient.invalidateQueries({ queryKey: ['approval', id] });
       queryClient.invalidateQueries({ queryKey: ['quotes'] });

@@ -4,6 +4,10 @@ import { dashboardApi } from '@/lib/api/dashboardApi';
 export function useDashboard() {
   return useQuery({
     queryKey: ['dashboard'],
-    queryFn: dashboardApi.getDashboardData,
+    queryFn: async () => Promise.all([
+      dashboardApi.getKpis(),
+      dashboardApi.getPriorityCustomers(),
+      dashboardApi.getCharts(),
+    ]),
   });
 }

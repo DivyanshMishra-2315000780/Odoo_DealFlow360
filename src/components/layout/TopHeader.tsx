@@ -1,7 +1,7 @@
 'use client';
 
 import { Bell, Search, LogOut, User as UserIcon } from 'lucide-react';
-import { useAuth } from '@/lib/auth/useSession';
+import { useAuth } from '@/lib/auth';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 
@@ -30,13 +30,9 @@ export function TopHeader() {
         <div className="h-8 w-px bg-slate-200"></div>
 
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+          <DropdownMenuTrigger>
             <Button variant="ghost" className="relative h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center p-0">
-              {user?.avatar ? (
-                <img src={user.avatar} alt={user.name} className="h-8 w-8 rounded-full object-cover" />
-              ) : (
-                <span className="text-sm font-medium text-slate-700">{user?.name?.charAt(0)}</span>
-              )}
+              <span className="text-sm font-medium text-slate-700">{user?.name?.charAt(0)}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">

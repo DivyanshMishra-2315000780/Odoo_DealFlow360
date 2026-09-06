@@ -20,8 +20,8 @@ export function useSubmitQuote() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: quotesApi.submitQuote,
-    onSuccess: (_, id) => {
+    mutationFn: ({ id, submittedById, submittedByName }: { id: string; submittedById: string; submittedByName: string }) => quotesApi.submitQuote(id, submittedById, submittedByName),
+    onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['quotes'] });
       queryClient.invalidateQueries({ queryKey: ['quote', id] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
